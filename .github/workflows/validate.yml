@@ -1,0 +1,47 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  skill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate skill
+        run: python3 scripts/validate-skill.py
+
+      - name: SKILL.md frontmatter is valid YAML
+        run: |
+          pip install --quiet pyyaml
+          python3 - <<'EOF'
+          import re, sys, yaml
+          text = open("skills/3d-auto-fabrik/SKILL.md", encoding="utf-8").read()
+          m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
+          if not m:
+              sys.exit("frontmatter not found")
+          data = yaml.safe_load(m.group(1))
+          assert data.get("name") == "3d-auto-fabrik", "name mismatch"
+          assert data.get("description"), "description missing"
+          print("frontmatter ok:", data["name"])
+          EOF
+
+      - name: JSON files parse
+        run: |
+          for f in evals/evals.json examples/claude.mcp.json examples/gemini-settings.json examples/cursor.mcp.json examples/windsurf.mcp_config.json; do
+            python3 -m json.tool "$f" > /dev/null || exit 1
+            echo "ok $f"
+          done
+
+      - name: check-setup.sh parses
+        run: sh -n skills/3d-auto-fabrik/scripts/check-setup.sh

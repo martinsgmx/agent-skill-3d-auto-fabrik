@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose an addition or change to the skill, docs, or tooling
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's missing or painful?
+      description: Describe the workflow problem, not the solution. "When I try to … the agent has to …"
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Which file(s) would change (SKILL.md, a reference, docs, an example) and how.
+    validations:
+      required: true
+  - type: dropdown
+    id: affects-safety
+    attributes:
+      label: Does this touch approval flow, gates, or safety wording?
+      options:
+        - "No"
+        - "Yes — I accept extra scrutiny on this PR"
+    validations:
+      required: true

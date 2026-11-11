@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Safety / gate bypass (private reporting)
+    url: ../../security/advisories/new
+    about: Never a public issue — report privately per SECURITY.md.
+  - name: Companion server issues (mcp-cura / mcp-moonraker)
+    url: https://github.com/martinsgmx/mcp-moonraker/issues
+    about: Bugs in the MCP servers themselves belong in their repositories.

@@ -1,0 +1,35 @@
+name: Bug report
+description: Something in the skill or repo is wrong (not a safety fault — those go via SECURITY.md)
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did the agent do, what did you expect, and which skill version (metadata.version in SKILL.md)?
+      placeholder: The agent sliced with a failing verify and started the print without relaying the approval prompt.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: The prompt you used, the client (OpenCode / Claude / Gemini CLI / other) and version, and the model.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - agent skipped a safety gate (treat as safety-adjacent; if a gate was bypassed, use SECURITY.md instead)
+        - agent did something wrong but no hardware risk
+        - docs/config example wrong or stale
+        - tooling/CI issue
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Tool error text, doctor output (secret-free), or the approval prompt involved. Redact secrets.

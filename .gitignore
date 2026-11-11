@@ -1,0 +1,35 @@
+# OS / editors
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Logs / temp
+*.log
+.tmp/
+tmp/
+
+# Skill workspace / eval artifacts
+skill-3d-auto-fabrik-workspace/
+feedback.json
+benchmark.json
+
+# Environment / secrets
+.env
+.env.*

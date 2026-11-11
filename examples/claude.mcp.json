@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "cura": {
+      "command": "mcp-cura",
+      "env": {
+        "MCP_CURA_ENGINE_BINARY": "/usr/lib/cura/CuraEngine"
+      }
+    },
+    "moonraker": {
+      "command": "mcp-moonraker",
+      "env": {
+        "MOONRAKER_URL": "http://printer.local:7125"
+      }
+    }
+  }
+}

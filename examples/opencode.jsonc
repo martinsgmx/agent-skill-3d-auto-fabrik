@@ -1,0 +1,26 @@
+// OpenCode (V2) — project opencode.jsonc or global ~/.config/opencode/opencode.jsonc
+// Note the V2 shape: servers live under mcp.servers, and the field is
+// "disabled" (default false), not "enabled".
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "cura": {
+        "type": "local",
+        "command": ["mcp-cura"],
+        "environment": {
+          // Optional: only if CuraEngine is not on PATH / not auto-found
+          "MCP_CURA_ENGINE_BINARY": "/usr/lib/cura/CuraEngine"
+        }
+      },
+      "moonraker": {
+        "type": "local",
+        "command": ["mcp-moonraker"],
+        "environment": {
+          "MOONRAKER_URL": "http://printer.local:7125"
+          // "MOONRAKER_API_KEY": "set-only-if-moonraker-requires-it"
+        }
+      }
+    }
+  }
+}
