@@ -2,8 +2,6 @@
 
 > `fabrik`: Fäbrik (_k-a:_/fábrica) — factory, in German and Spanish.
 
-> _anti-ai/slop_: this repository was written by humans. The agent may read it.
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Skill format](https://img.shields.io/badge/Agent%20Skills-standard-7c3aed.svg)](https://agentskills.io/specification.md)
 
