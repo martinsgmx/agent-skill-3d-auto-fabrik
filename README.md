@@ -13,10 +13,10 @@
 orchestrates two MCP servers to take a 3D model from a mesh file to a
 supervised Klipper print:
 
-| Server | Job | Source |
-| --- | --- | --- |
-| `mcp-cura` | mesh inspect/repair, profile resolve/verify, CuraEngine slice, G-code review | sibling repository — builds from source, not yet published to crates.io/GitHub |
-| [`mcp-moonraker`](https://github.com/martinsgmx/mcp-moonraker) | printer state, temperatures, camera, pause/resume/cancel, print start, job queue | published sibling repository |
+| Server                                                         | Job                                                                              | Source                                                                         |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| [`mcp-cura`](https://github.com/martinsgmx/mcp-cura)           | mesh inspect/repair, profile resolve/verify, CuraEngine slice, G-code review     | sibling repository — builds from source, not yet published to crates.io/GitHub |
+| [`mcp-moonraker`](https://github.com/martinsgmx/mcp-moonraker) | printer state, temperatures, camera, pause/resume/cancel, print start, job queue | published sibling repository                                                   |
 
 This repository contains **the skill only** — the servers live in their own
 repositories and are installed separately. The skill teaches any
@@ -124,12 +124,12 @@ repos/
 3. **Install the skill.** There is nothing to build — the skill is markdown.
    Point your agent at `skills/3d-auto-fabrik/`:
 
-   | Client | Install |
-   | --- | --- |
-   | OpenCode | `cp -r skills/3d-auto-fabrik ~/.config/opencode/skills/` (or project `.opencode/skills/`, or `.agents/skills/`) |
-   | Claude Code | `cp -r skills/3d-auto-fabrik ~/.claude/skills/` (or project `.claude/skills/`) |
-   | Gemini CLI | `cp -r skills/3d-auto-fabrik ~/.agents/skills/` — or `gemini skills install <this-repo-url> --consent --path skills/3d-auto-fabrik` |
-   | Generic Agent Skills clients | copy/symlink `skills/3d-auto-fabrik/` into the client's skills directory |
+   | Client                       | Install                                                                                                                             |
+   | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+   | OpenCode                     | `cp -r skills/3d-auto-fabrik ~/.config/opencode/skills/` (or project `.opencode/skills/`, or `.agents/skills/`)                     |
+   | Claude Code                  | `cp -r skills/3d-auto-fabrik ~/.claude/skills/` (or project `.claude/skills/`)                                                      |
+   | Gemini CLI                   | `cp -r skills/3d-auto-fabrik ~/.agents/skills/` — or `gemini skills install <this-repo-url> --consent --path skills/3d-auto-fabrik` |
+   | Generic Agent Skills clients | copy/symlink `skills/3d-auto-fabrik/` into the client's skills directory                                                            |
 
    The skill ID is `3d-auto-fabrik` (the folder name must match `name`).
    Symlinking instead of copying works well for development — the client
@@ -151,8 +151,8 @@ repos/
    sh skills/3d-auto-fabrik/scripts/check-setup.sh   # binaries on PATH, versions, tool counts
    ```
 
-   Then ask the agent: *"run mcp-moonraker verify connection and tell me the
-   Klipper state."* A clean answer means skill → client → servers → printer all
+   Then ask the agent: _"run mcp-moonraker verify connection and tell me the
+   Klipper state."_ A clean answer means skill → client → servers → printer all
    work.
 
 More documentation: [architecture](docs/architecture.md) ·
