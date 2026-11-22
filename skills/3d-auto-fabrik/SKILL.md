@@ -22,7 +22,7 @@ compatibility: >-
   and slicing work without printer access.
 metadata:
   author: skill-3d-auto-fabrik contributors
-  version: "0.2.0"
+  version: "0.2.4"
 ---
 
 # 3d-auto-fabrik
@@ -54,7 +54,7 @@ nozzle. The friction is the point.
    print, `moonraker_verify_connection` before any printer action, and
    `moonraker_files_list` + `moonraker_file_metadata` after any transfer.
 3. **`moonraker_emergency_stop` is the only un-gated lever.** Use it only when
-   something is physically going wrong *right now* (smoke, grinding, nozzle
+   something is physically going wrong _right now_ (smoke, grinding, nozzle
    dragging through the part, axes colliding). For "stop heating" outside an
    emergency, use `moonraker_turn_off_heaters` — reversible and un-gated.
 4. **Stay inside the local safety policy.** Temperature caps, read-only mode,
@@ -126,14 +126,14 @@ Run this gate once per session and **repeat it at the start of every mutating
 stage** (import, slice, queue, print). Produce a readiness table; a red row
 blocks mutations, not read-only work.
 
-| Check | Tool | Green means |
-| --- | --- | --- |
-| Slicer health | `mcp-orca doctor` or `mcp-cura doctor` | server up; read the engine entry, not just overall `ok` |
-| Engine usable | `orca_engine_info` / `cura_engine_info` | `available: true` **and** `slice_command_configured: true` (or the Cura equivalent) |
-| Policies | `orca_policy_info` / `cura_policy_info`, `moonraker_policy_info` | caps, approval mode and read-only switches known |
-| Printer | `moonraker_verify_connection`, `moonraker_server_info`, `moonraker_config` (read-only) | connected; Klipper `ready`; facts for printer identity |
-| Queue | `moonraker_job_queue_status` | state and existing jobs known (a paused queue never auto-starts) |
-| Presets | `orca_profile_list` / `cura_profile_list` + user config | printer + filament + process (or Cura essentials) resolvable |
+| Check         | Tool                                                                                   | Green means                                                                         |
+| ------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Slicer health | `mcp-orca doctor` or `mcp-cura doctor`                                                 | server up; read the engine entry, not just overall `ok`                             |
+| Engine usable | `orca_engine_info` / `cura_engine_info`                                                | `available: true` **and** `slice_command_configured: true` (or the Cura equivalent) |
+| Policies      | `orca_policy_info` / `cura_policy_info`, `moonraker_policy_info`                       | caps, approval mode and read-only switches known                                    |
+| Printer       | `moonraker_verify_connection`, `moonraker_server_info`, `moonraker_config` (read-only) | connected; Klipper `ready`; facts for printer identity                              |
+| Queue         | `moonraker_job_queue_status`                                                           | state and existing jobs known (a paused queue never auto-starts)                    |
+| Presets       | `orca_profile_list` / `cura_profile_list` + user config                                | printer + filament + process (or Cura essentials) resolvable                        |
 
 Then settle the plan with the user: **which printer, which material, which
 nozzle, which quality/process preset, which file, how many copies, where on
@@ -195,11 +195,11 @@ step references it.
 `cura_mesh_inspect` first (bounds in mm, triangle count, watertightness,
 volume, degenerate triangles). Then:
 
-| Need | mcp-orca | mcp-cura |
-| --- | --- | --- |
-| orient / place / scale / mirror | `orca_mesh_transform` (scale/mirror → rotate → translate) | `cura_mesh_transform` (+ `center_on_bed`) |
-| combine parts | `orca_mesh_merge` (triangle soup) | `cura_mesh_merge`, `cura_mesh_boolean` |
-| clean / thicken / simplify | not available | `cura_mesh_remesh`, `cura_mesh_offset`, `cura_mesh_decimate` |
+| Need                            | mcp-orca                                                  | mcp-cura                                                     |
+| ------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------ |
+| orient / place / scale / mirror | `orca_mesh_transform` (scale/mirror → rotate → translate) | `cura_mesh_transform` (+ `center_on_bed`)                    |
+| combine parts                   | `orca_mesh_merge` (triangle soup)                         | `cura_mesh_merge`, `cura_mesh_boolean`                       |
+| clean / thicken / simplify      | not available                                             | `cura_mesh_remesh`, `cura_mesh_offset`, `cura_mesh_decimate` |
 
 Inspect again after every repair and quote the numbers. Mesh writes are
 policy-gated but not approval-gated; still, show the user what changed. If
@@ -224,13 +224,13 @@ Cura and restart at Stage 1.
 **Stage 4 — Slice.**
 
 - Orca: `orca_slice(model_artifact_ids=[…], printer, filament, process,
-  overrides?, profiles?, name, wait=true, wait_timeout_secs)`. Slicing fails
+overrides?, profiles?, name, wait=true, wait_timeout_secs)`. Slicing fails
   clearly when no engine invocation is configured. Respect
   `max_concurrent_jobs` (default 2); poll `orca_slice_status`, or
   `orca_slice_wait` for short jobs. `orca_slice_cancel` is for queued/running
   jobs only.
 - Cura: `cura_slice(model_artifact_ids=[…], definition, quality, material,
-  variant, intent, overrides?, name, wait=true, wait_timeout_secs)`. Same job
+variant, intent, overrides?, name, wait=true, wait_timeout_secs)`. Same job
   rules; poll `cura_slice_status` / `cura_slice_wait` / `cura_slice_cancel`.
 
 If a slice fails, quote the actual engine error from the job status — never
@@ -248,11 +248,11 @@ guess at a cause.
     and disables steppers (`M84`);
   - no unexpected `M112`, `M502`, `M500`, mid-file `G28`, or raw commands the
     profile should not contain.
-  If the end sequence is wrong or dangerous commands are present, re-slice
-  with a corrected process preset. mcp-orca has no G-code rewrite tool — do
-  not hand-edit the artifact.
+    If the end sequence is wrong or dangerous commands are present, re-slice
+    with a corrected process preset. mcp-orca has no G-code rewrite tool — do
+    not hand-edit the artifact.
 - Cura: `cura_gcode_inspect` + `cura_gcode_verify`. If shutdown or steppers
-  are missing, `cura_gcode_prepare` creates a *new* artifact; carry the new
+  are missing, `cura_gcode_prepare` creates a _new_ artifact; carry the new
   id forward. Dangerous commands mean re-slice, never a hand edit.
 
 Then **show the user the summary** — engine, time, filament, hottest
@@ -325,11 +325,11 @@ One prepared action = one single-use approval with a short TTL (default
 120 s). The stored tool and arguments are what execute; arguments supplied
 later are decorative.
 
-| Server | Prepare | Decide | Then |
-| --- | --- | --- | --- |
-| mcp-orca | first gated call returns `apr_…` | `orca_approval_decide` (in-band/both) or `mcp-orca approvals approve <id>` | retry the **identical** call once |
-| mcp-cura | first gated call returns `approval_id` + phrase | user reads/approves in chat, or `mcp-cura approve <id>` | `cura_confirm_action` with phrase + `acknowledge=true` |
-| mcp-moonraker | first gated call returns `approval_id` + phrase | user reads/approves in chat, or `mcp-moonraker approve <id>` | `moonraker_confirm_action` with phrase + `acknowledge=true` |
+| Server        | Prepare                                         | Decide                                                                     | Then                                                        |
+| ------------- | ----------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| mcp-orca      | first gated call returns `apr_…`                | `orca_approval_decide` (in-band/both) or `mcp-orca approvals approve <id>` | retry the **identical** call once                           |
+| mcp-cura      | first gated call returns `approval_id` + phrase | user reads/approves in chat, or `mcp-cura approve <id>`                    | `cura_confirm_action` with phrase + `acknowledge=true`      |
+| mcp-moonraker | first gated call returns `approval_id` + phrase | user reads/approves in chat, or `mcp-moonraker approve <id>`               | `moonraker_confirm_action` with phrase + `acknowledge=true` |
 
 `*_pending_approvals` re-lists what is waiting; `moonraker_cancel_approval` /
 `mcp-orca approvals deny <id>` / `mcp-cura deny <id>` void an action before it
