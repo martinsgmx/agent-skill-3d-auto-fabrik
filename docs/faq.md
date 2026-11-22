@@ -1,44 +1,66 @@
 # FAQ
 
-**Does the skill need both servers?**
-Yes, for the full pipeline. Mesh work, slicing and G-code review only need
-mcp-cura; read-only printer status only needs mcp-moonraker. The skill's
-checkpoint ("show me the G-code before you print") is meaningless without
-both.
+**Does the skill need all three servers?**
+No. It needs **mcp-moonraker** plus **one** slicing server. mcp-orca is
+preferred; mcp-cura is the fallback and adds mesh repair plus G-code
+verify/prepare. Mesh work, slicing and G-code review only need the slicer;
+read-only printer status only needs mcp-moonraker. The checkpoint ("show me
+the G-code before you print") is meaningless without both a slicer and the
+printer server.
+
+**How does it choose between Orca and Cura?**
+mcp-orca first. If it is not installed, not running, or has no engine
+configured, the skill uses mcp-cura for the whole job and says so. If a job
+needs an Orca-missing capability (boolean/offset/remesh/decimate, G-code
+verify/prepare), it offers Cura. It never mixes artifact ids between servers.
+See
+[../skills/3d-auto-fabrik/references/engine-selection.md](../skills/3d-auto-fabrik/references/engine-selection.md).
+
+**Why is Orca preferred if Cura has more tools?**
+Orca is the newer adapter and the default target of this skill. Cura remains
+fully supported as the fallback and as the richer mesh/G-code toolkit. Pick
+whichever matches your installed slicer; the pipeline and gates are the same.
 
 **I don't run a Voron / I have a printer with a different setup.**
-Nothing in the skill is Voron-specific. The machine definition, quality
-profiles and material come from your Cura installation; the printer comes
-from Moonraker. Unsupported machines fail loudly at
-`cura_profile_verify` / `moonraker_verify_connection`, which is the desired
-behavior.
+Nothing in the skill is Voron-specific. Orca needs printer/filament/process
+presets; Cura needs a machine definition plus quality/material; the printer
+comes from Moonraker. Unsupported machines fail loudly at
+`orca_profile_resolve` / `cura_profile_verify` / `moonraker_verify_connection`,
+which is the desired behavior.
 
 **Can it print without human confirmation?**
-No. `moonraker_print_start` is high risk and always double-confirmed. With
+No. `moonraker_print_start` is high risk and always requires approval. With
 `mode = "out_of_band"` the human approves in a terminal, out of band; with
-`in_band` the confirmation phrase is presented in chat. Either way the agent
-may not self-approve. If you want full autonomy, you must also accept that
-no software in this stack will bless an unattended print *on your behalf* —
-you can of course write your own wrapper, but that is outside this skill's
-guarantee and you should not.
+`in_band` the approval is presented in chat. Either way the agent may not
+self-approve. If you want full autonomy, you must also accept that no software
+in this stack will bless an unattended print *on your behalf* — you can of
+course write your own wrapper, but that is outside this skill's guarantee and
+you should not.
 
 **Why doesn't it upload the G-code to the printer itself?**
-Neither server ships an upload tool on purpose: the hand-off is an
+Neither slicer ships an upload tool on purpose: the hand-off is an
 approval-gated export or a human copy. If you want a one-click experience,
-map the gcodes root onto a directory under mcp-cura's export roots (e.g.
-a CIFS/NFS mount on the printer running OctoPrint-style shares) — then
-Stage 6 is `cura_artifact_export` with the user's approval.
+map the gcodes root onto a directory under the slicer's export roots (e.g.
+a CIFS/NFS mount on the printer) — then Stage 6 is `*_artifact_export` with
+the user's approval.
+
+**Orca has no `gcode_verify`. Is that safe?**
+The skill compensates: `orca_gcode_inspect` for time/filament/temperature
+maxima, `orca_artifact_read_text` for the header/footer, and a hard rule to
+re-slice if the end sequence is wrong. Cura's verify/prepare remains
+available if you need that extra check — run the job in Cura, or switch
+before slicing.
 
 **Tool X isn't showing up.**
 Check in this order: server on PATH → client tool filter (OpenCode
 permissions, Claude allow/deny, Gemini `includeTools`) → server policy
-(`moonraker_policy_info` / `cura_policy_info`) → transport (stdio vs HTTP,
-token). See [platforms.md](platforms.md#client-side-tool-filtering-read-this-if-a-tool-doesnt-exist).
+(`moonraker_policy_info` / `orca_policy_info` / `cura_policy_info`) →
+transport (stdio vs HTTP, token). See
+[platforms.md](platforms.md#client-side-tool-filtering-read-this-if-a-tool-doesnt-exist).
 
 **Which model should I run the skill on?**
 Any capable agentic model with tool use. The skill's value is procedural,
-not cleverness-dependent; weaker models benefit most from the
-explicit gates.
+not cleverness-dependent; weaker models benefit most from the explicit gates.
 
 **Does this work with OctoPrint?**
 No. mcp-moonraker targets Moonraker/Klipper. For OctoPrint there are
@@ -46,18 +68,19 @@ separate MCP servers; this skill's pipeline stages 0–5 (mesh → G-code)
 apply unchanged, but Stage 6–7 differ.
 
 **Can I run the servers over HTTP instead of stdio?**
-Yes — both speak streamable HTTP behind a bearer token. Keep the default
+Yes — all three speak streamable HTTP behind a bearer token. Keep the default
 loopback bind; never expose them to a network without `allowed_hosts`,
 `allowed_origins` and a token. Remote print control is exactly the scenario
 `out_of_band`/`both` approval mode exists for.
 
 **How do I know the versions match?**
-`mcp-cura --version` / `mcp-moonraker --version`, then regenerate the
-reference tables with `python3 scripts/generate-tool-reference.py` — the
-generated tables carry the version in the provenance line when you commit
-the result.
+`mcp-orca --version`, `mcp-cura --version`, `mcp-moonraker --version`, then
+regenerate the reference tables with
+`python3 scripts/generate-tool-reference.py` — the generated tables carry the
+version in the provenance line when you commit the result.
 
 **Why MIT?**
-Same license as both companion MCP servers. The human running the printer
+The skill is MIT. The companion servers keep their own licenses: mcp-orca is
+Apache-2.0; mcp-cura and mcp-moonraker are MIT. The human running the printer
 gets maximum freedom; the author accepts no liability — see
 [../LICENSE](../LICENSE) and [safety.md](safety.md).

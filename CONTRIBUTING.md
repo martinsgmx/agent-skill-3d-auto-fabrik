@@ -1,6 +1,6 @@
 # Contributing to skill-3d-auto-fabrik
 
-Thanks for helping. This repo is small on purpose: one skill, two companion
+Thanks for helping. This repo is small on purpose: one skill, three companion
 MCP servers, a lot of care around a heated machine.
 
 ## Ground rules
@@ -14,9 +14,12 @@ MCP servers, a lot of care around a heated machine.
    hand-edit the table rows in `references/mcp-*-tools.md`.
 3. **Keep SKILL.md lean.** The body budget is 500 lines. Detail belongs in
    `references/`. Follow progressive disclosure.
-4. **Honest docs.** No invented URLs, no unverified commands. If it hasn't
+4. **Keep both engines honest.** mcp-orca is preferred, mcp-cura is the
+   fallback. A pipeline change must update both columns (or say explicitly
+   why the engines differ), and must never imply artifact ids cross servers.
+5. **Honest docs.** No invented URLs, no unverified commands. If it hasn't
    been run, say so.
-5. **No ML-generated slop.** Write like a human engineer. Precise, warm,
+6. **No ML-generated slop.** Write like a human engineer. Precise, warm,
    direct.
 
 ## Development workflow

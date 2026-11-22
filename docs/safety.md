@@ -7,30 +7,49 @@ project is therefore **defense in depth**, not politeness text in a prompt.
 ## The three layers
 
 1. **Server-side policy** — the MCP servers cap temperatures, disable raw
-   G-code and host administration by default, refuse exports outside the
-   configured roots, and gate destructive tools behind double confirmation.
-   Policy lives in the servers; it cannot be argued out of by a persuasive
-   prompt.
-2. **Approval lifecycle** — prepare → single-use, expiring approval id →
-   confirm. The executed action is the prepared action, not whatever the
-   confirm-call says. Approvals are local state files with restricted
-   permissions (`in_band` / `out_of_band` / `both`).
-3. **The skill** — procedural discipline: verify before you trust
-   (`cura_gcode_verify`, `moonraker_verify_connection`, file metadata after
-   transfer), present every approval prompt verbatim, stop at the human
-   checkpoint, and treat `emergency_stop` as the single, unmistakable
-   exception.
+   G-code and host administration by default, confine imports/exports to
+   configured roots, and gate destructive tools behind approval. Policy lives
+   in the servers; it cannot be argued out of by a persuasive prompt.
+2. **Approval lifecycle** — a prepared action becomes a single-use, expiring
+   approval. mcp-orca stores the request and asks you to decide then retry
+   the identical call; mcp-cura and mcp-moonraker use a phrase plus
+   `*_confirm_action`. The executed action is always the prepared action.
+3. **The skill** — procedural discipline: choose an engine and stick to it,
+   inspect the mesh, resolve the profile, review the G-code, verify the
+   connection and the transferred file, present every approval prompt
+   verbatim, stop at the human checkpoint, and treat `emergency_stop` as the
+   single, unmistakable exception.
 
 ## Risk ladder
 
 | Tier | Reversible? | Examples | Gate |
 | --- | --- | --- | --- |
-| read | n/a | status, temps, inspect, lists | none (policy) |
-| low | yes | fan %, flow/speed factor, imports, queue add | none (policy) |
-| medium | mostly | slice, heaters, XY jog, pause/resume | none (policy) — but announce first |
-| high | no | print start/cancel, exports, deletes, macros, Klipper restarts | double confirmation |
-| critical | no | raw G-code, host reboot/shutdown, updates | double confirmation + explicit policy opt-in |
+| read | n/a | status, temps, inspect, lists, profile resolve | none (policy) |
+| low | yes | fan %, flow/speed factor, imports, mesh transform, queue add | none (policy) |
+| medium | mostly | slice, heaters, XY jog, pause/resume, approval decision | none (policy) — but announce first |
+| high | no | print start/cancel, exports, deletes, macros, Klipper restarts | approval required |
+| critical | no | raw G-code, host reboot/shutdown, updates | approval + explicit policy opt-in |
 | emergency | — | `moonraker_emergency_stop` | always available; physical danger only |
+
+mcp-orca stops at `high`; it never touches the printer. The `critical` tier
+belongs to mcp-cura/mcp-moonraker host administration.
+
+## G-code review is not optional
+
+This is the gate that stands between a bad slice and a bad print.
+
+- **mcp-cura** has `cura_gcode_verify`: dangerous commands, temperatures vs.
+  local policy, missing heater shutdown, missing stepper disable, missing
+  metadata. Fix a missing shutdown with `cura_gcode_prepare`; re-slice for
+  dangerous commands.
+- **mcp-orca** has `orca_gcode_inspect` only. It reports statistics and
+  maximum temperatures, but **does not scan for dangerous commands**. The
+  agent must read the header and footer with `orca_artifact_read_text` and
+  confirm heater-off, park/lift, `M84`, and the absence of unexpected
+  `M112`/`M502`/`M500`/mid-file `G28`. If the end sequence is wrong, re-slice
+  with a corrected process preset. There is no Orca prepare/rewrite tool.
+
+Never hand-edit G-code to "fix" a safety issue. Re-slice.
 
 ## Standing rules (short form)
 
@@ -46,6 +65,8 @@ project is therefore **defense in depth**, not politeness text in a prompt.
   user "seemed to want it done".
 - **One approval, one action, one time.** TTL is deliberately short;
   stale approvals are re-prepared, not revived.
+- **One engine per job.** Do not pass Orca artifact ids to Cura or vice
+  versa; switching means re-importing.
 - **Supervision is a requirement, not a courtesy.** Remote, unattended
   printing is possible with this stack; it is enabled by `out_of_band`
   approval mode and camera checks — but it remains the user's call, and

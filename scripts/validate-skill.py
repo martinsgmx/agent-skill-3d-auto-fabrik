@@ -80,7 +80,7 @@ def main() -> int:
             fail(f"description is {len(desc)} chars; must be 1-1024")
         else:
             ok(f"description length {len(desc)} ok")
-        for term in ("mcp-cura", "mcp-moonraker"):
+        for term in ("mcp-orca", "mcp-cura", "mcp-moonraker"):
             if term not in desc:
                 fail(f"description should mention {term} to anchor triggering")
 

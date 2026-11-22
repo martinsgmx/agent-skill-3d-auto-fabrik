@@ -4,9 +4,9 @@
 
 This repository contains a skill (instructions for AI agents) and its
 tooling. It does not itself execute printer actions; the actions are
-executed by the companion MCP servers (`mcp-cura`, `mcp-moonraker`) under
-their own policy engines. A vulnerability here is **any content that lets an
-agent bypass or weaken those gates**, including:
+executed by the companion MCP servers (`mcp-orca`, `mcp-cura`,
+`mcp-moonraker`) under their own policy engines. A vulnerability here is
+**any content that lets an agent bypass or weaken those gates**, including:
 
 - skill text that instructs the agent to skip verification or self-approve,
 - approval-flow flaws in documentation or examples (e.g. wrong wording that
@@ -32,8 +32,8 @@ patch and a `CHANGELOG.md` entry here.
 ## Hard truths
 
 - The servers' policy engine is the enforcement layer. Filing a report
-  here about a server bug is fine — it will be routed to `mcp-cura` /
-  `mcp-moonraker`, which have their own security policies.
+  here about a server bug is fine — it will be routed to `mcp-orca` /
+  `mcp-cura` / `mcp-moonraker`, which have their own security policies.
 - "The agent disobeyed a gate because I told it it was my printer" is not a
   vulnerability. "The skill told the agent to disobey the gate" is.
 - Printer hardware faults (fires, jammed axes) are emergencies for physical

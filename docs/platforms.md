@@ -7,6 +7,10 @@ Linux/macOS; adjust on Windows.
 The skill id is `3d-auto-fabrik`. Install = copy (or symlink)
 `skills/3d-auto-fabrik/` into the client's skills directory.
 
+Register **mcp-orca** (preferred) and **mcp-moonraker** at minimum. Add
+**mcp-cura** if you want the automatic fallback for engines or mesh
+operations Orca cannot do.
+
 ## OpenCode (V2)
 
 Skill — any of:
@@ -25,16 +29,24 @@ MCP — `opencode.jsonc` (note: V2 uses `mcp.servers`, not bare `mcp`):
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "servers": {
-      "cura":      { "type": "local", "command": ["mcp-cura"] },
-      "moonraker": { "type": "local", "command": ["mcp-moonraker"],
-                     "environment": { "MOONRAKER_URL": "http://printer.local:7125" } }
+      "orca": {
+        "type": "local",
+        "command": ["mcp-orca"],
+        "environment": { "MCP_ORCA_CONFIG": "/home/YOU/.config/mcp-orca/mcp-orca.toml" }
+      },
+      "cura": { "type": "local", "command": ["mcp-cura"] },
+      "moonraker": {
+        "type": "local",
+        "command": ["mcp-moonraker"],
+        "environment": { "MOONRAKER_URL": "http://printer.local:7125" }
+      }
     }
   }
 }
 ```
 
-Or the CLI form: `opencode mcp add cura -- mcp-cura`. `opencode mcp list`
-shows connection state; tool names appear as `cura_<tool>` /
+Or the CLI form: `opencode mcp add orca -- mcp-orca`. `opencode mcp list`
+shows connection state; tool names appear as `orca_<tool>`, `cura_<tool>` /
 `moonraker_<tool>`.
 
 ## Claude Code / Claude Desktop
@@ -51,22 +63,25 @@ MCP — project `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "cura":      { "command": "mcp-cura" },
-    "moonraker": { "command": "mcp-moonraker",
-                   "env": { "MOONRAKER_URL": "http://printer.local:7125" } }
+    "orca": { "command": "mcp-orca", "env": { "MCP_ORCA_CONFIG": "/path/to/mcp-orca.toml" } },
+    "cura": { "command": "mcp-cura" },
+    "moonraker": {
+      "command": "mcp-moonraker",
+      "env": { "MOONRAKER_URL": "http://printer.local:7125" }
+    }
   }
 }
 ```
 
-or CLI: `claude mcp add cura -- mcp-cura`. Claude Desktop uses
+or CLI: `claude mcp add orca -- mcp-orca`. Claude Desktop uses
 `claude_desktop_config.json` (`~/.config/Claude/` on Linux,
 `~/Library/Application Support/Claude/` on macOS) with the same
 `mcpServers` object; use absolute binary paths
-(`~/.cargo/bin/mcp-cura`) if the client can't find them.
+(`~/.cargo/bin/mcp-orca`) if the client can't find them.
 
 **Claude.ai (web) cannot launch local stdio binaries.** Use Claude Desktop,
 Claude Code, or serve the MCP servers over authenticated streamable HTTP
-(`mcp-cura serve --transport http` with `MCP_CURA_HTTP_TOKEN`, mind the
+(`mcp-orca serve --transport http` with `MCP_ORCA_HTTP_TOKEN`, mind the
 loopback rules) and register the remote URL instead.
 
 ## Gemini CLI
@@ -84,6 +99,7 @@ MCP — `~/.gemini/settings.json` (user) or `.gemini/settings.json` (project),
 or the CLI:
 
 ```sh
+gemini mcp add orca mcp-orca
 gemini mcp add cura mcp-cura
 gemini mcp add moonraker mcp-moonraker -e MOONRAKER_URL=http://printer.local:7125
 ```
@@ -91,15 +107,18 @@ gemini mcp add moonraker mcp-moonraker -e MOONRAKER_URL=http://printer.local:712
 ```json
 {
   "mcpServers": {
-    "cura":      { "command": "mcp-cura" },
-    "moonraker": { "command": "mcp-moonraker",
-                   "env": { "MOONRAKER_URL": "http://printer.local:7125" } }
+    "orca": { "command": "mcp-orca", "env": { "MCP_ORCA_CONFIG": "/path/to/mcp-orca.toml" } },
+    "cura": { "command": "mcp-cura" },
+    "moonraker": {
+      "command": "mcp-moonraker",
+      "env": { "MOONRAKER_URL": "http://printer.local:7125" }
+    }
   }
 }
 ```
 
-Tool names appear as `cura_<tool>` / `moonraker_<tool>` (Gemini may prefix
-with `serverName__toolName` on conflicts).
+Tool names appear as `orca_<tool>`, `cura_<tool>`, `moonraker_<tool>`
+(Gemini may prefix with `serverName__toolName` on conflicts).
 
 ## Cursor
 
@@ -107,6 +126,7 @@ MCP — `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
 
 ```json
 { "mcpServers": {
+    "orca":      { "command": "mcp-orca", "env": { "MCP_ORCA_CONFIG": "/path/to/mcp-orca.toml" } },
     "cura":      { "command": "mcp-cura" },
     "moonraker": { "command": "mcp-moonraker" }
 } }
@@ -124,6 +144,7 @@ MCP — `~/.codeium/windsurf/mcp_config.json`:
 
 ```json
 { "mcpServers": {
+    "orca":      { "command": "mcp-orca", "env": { "MCP_ORCA_CONFIG": "/path/to/mcp-orca.toml" } },
     "cura":      { "command": "mcp-cura" },
     "moonraker": { "command": "mcp-moonraker" }
 } }
@@ -141,6 +162,7 @@ Any client that speaks stdio MCP can launch the binaries directly:
 
 ```json
 { "mcpServers": {
+    "orca":      { "command": "/home/YOU/.cargo/bin/mcp-orca", "env": { "MCP_ORCA_CONFIG": "/path/to/mcp-orca.toml" } },
     "cura":      { "command": "/home/YOU/.cargo/bin/mcp-cura" },
     "moonraker": { "command": "/home/YOU/.cargo/bin/mcp-moonraker" }
 } }
@@ -158,14 +180,15 @@ e.g. OpenCode `permissions` deny-rules on `moonraker_*`, Claude's
 `allowedTools`/`disallowedTools`, Gemini's `includeTools`/`excludeTools`.
 If the agent reports a server-connected-but-tool-missing situation, look at
 the client filter first, then the server policy (`moonraker_policy_info` /
-`cura_policy_info`), then `print-config`.
+`orca_policy_info` / `cura_policy_info`), then `print-config`.
 
 ## Verifying the whole chain
 
 ```sh
 sh skills/3d-auto-fabrik/scripts/check-setup.sh
-mcp-cura doctor --json
-mcp-moonraker doctor --json
+mcp-orca doctor
+mcp-cura doctor
+mcp-moonraker doctor
 ```
 
 Then, in the agent: "run mcp-moonraker verify connection and tell me the
