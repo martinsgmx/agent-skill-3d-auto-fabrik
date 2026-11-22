@@ -5,6 +5,16 @@
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "servers": {
+      "orca": {
+        "type": "local",
+        "command": ["mcp-orca"],
+        "environment": {
+          // Slicing needs [engine] preset = "orca" (or slice_command)
+          // and a reachable orca-slicer binary. mcp-orca reads no config
+          // file unless you point it at one:
+          "MCP_ORCA_CONFIG": "/path/to/mcp-orca.toml"
+        }
+      },
       "cura": {
         "type": "local",
         "command": ["mcp-cura"],

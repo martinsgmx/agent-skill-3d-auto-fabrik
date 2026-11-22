@@ -1,167 +1,310 @@
 ---
 name: 3d-auto-fabrik
 description: >-
-  Orchestrates the mcp-cura and mcp-moonraker MCP servers so an agent can take a
-  3D model from a mesh file to a supervised Klipper/Moonraker print: mesh
-  inspection and repair, CuraEngine profile resolution and slicing, G-code
-  safety verification, transfer to the printer, print start, live monitoring,
-  pause/resume/cancel and job-queue management — always behind the servers'
-  risk and approval gates. Use this skill whenever the user mentions slicing,
-  3D printing, STL/3MF slicing, CuraEngine, Klipper or Moonraker — even if they
-  never name these MCP servers — and whenever the user asks to prepare, verify,
-  send or supervise a print job. Do not use it for general CAD authoring or for
-  editing Klipper firmware/printer configuration itself.
+  Orchestrates mcp-orca (preferred) or mcp-cura for slicing, and
+  mcp-moonraker for supervised Klipper/Moonraker printing: URL/ZIP model
+  bundles and model-file discovery, a unique per-job workspace, printer and
+  material configuration seeded from live MCP settings, mesh import and
+  inspection, profile resolution, slicing, ready-made G-code validation and
+  review, transfer, job queue, print start, live monitoring and
+  pause/resume/cancel — always behind the servers' policy and approval gates.
+  Use this skill whenever the user mentions slicing, 3D printing,
+  STL/3MF/OBJ/AMF files, model download URLs or ZIPs, OrcaSlicer, CuraEngine,
+  Klipper or Moonraker — even if they never name these MCP servers — and
+  whenever the user asks to prepare, verify, send or supervise a print job.
+  Do not use it for general CAD authoring or for editing Klipper
+  firmware/printer configuration itself.
 license: MIT
 compatibility: >-
-  Requires the mcp-cura and mcp-moonraker MCP servers (Rust binaries on PATH),
-  CuraEngine for slicing, and a reachable Klipper/Moonraker host for printing.
-  Mesh inspection, G-code review and slicing work without printer access.
+  Requires mcp-moonraker and at least one slicing server: mcp-orca (preferred)
+  or mcp-cura (fallback). Slicing also needs OrcaSlicer or CuraEngine; printing
+  needs a reachable Klipper/Moonraker host. Mesh inspection, profile review
+  and slicing work without printer access.
 metadata:
   author: skill-3d-auto-fabrik contributors
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # 3d-auto-fabrik
 
-Orchestrator for **mcp-cura** (mesh → slice → G-code) and **mcp-moonraker**
-(printer state → print). The two servers deliberately do not know about each
-other: mcp-cura never contacts the printer, and mcp-moonraker never slices.
-This skill is the glue. Files move between them only through an explicit,
-approval-gated handoff.
+One pipeline, two interchangeable slicer adapters, one printer server:
+
+- **mcp-orca** (preferred) — OrcaSlicer presets, mesh inspect/transform/merge,
+  background slice jobs, G-code inspection.
+- **mcp-cura** (fallback) — CuraEngine definitions/quality profiles, richer
+  mesh repair, G-code verify/prepare.
+- **mcp-moonraker** — Klipper state, temperatures, files, print control.
+
+The slicers never contact the printer; mcp-moonraker never slices. This skill
+is the glue. Files move between them only through an explicit, approval-gated
+handoff.
 
 ## Non-negotiable rules — read before touching hardware
 
 These rules exist because a 3D printer is a heater, a motor and a sharp
 nozzle. The friction is the point.
 
-1. **Never confirm a prepared high-risk action on the user's behalf.**
-   `moonraker_print_start`, `moonraker_print_cancel`, `moonraker_run_macro`,
-   `cura_artifact_export`, `moonraker_file_delete` and friends return an
-   approval prompt first. Your job is to present that prompt, clearly and
-   honestly, and wait. Only after the user explicitly approves (in chat, or by
-   running `mcp-moonraker approve <id>` / `mcp-cura approve <id>` out of band)
-   may you call the matching `*_confirm_action` tool. Never invent, reuse or
-   paraphrase approval ids or confirmation phrases.
-2. **Never skip verification to be helpful.** `cura_gcode_verify` before any
-   print, `moonraker_verify_connection` before any printer action,
+1. **Never confirm a prepared action on the user's behalf.** Every slicer
+   export/delete and every destructive Moonraker action returns an approval
+   prompt first. Present it clearly and wait. Only after the user explicitly
+   approves — in chat, or by running the server's out-of-band approval
+   command — may you complete the action. Never invent, reuse or paraphrase
+   approval ids or confirmation phrases.
+2. **Never skip verification to be helpful.** Review the G-code before any
+   print, `moonraker_verify_connection` before any printer action, and
    `moonraker_files_list` + `moonraker_file_metadata` after any transfer.
 3. **`moonraker_emergency_stop` is the only un-gated lever.** Use it only when
    something is physically going wrong *right now* (smoke, grinding, nozzle
    dragging through the part, axes colliding). For "stop heating" outside an
    emergency, use `moonraker_turn_off_heaters` — reversible and un-gated.
 4. **Stay inside the local safety policy.** Temperature caps, read-only mode,
-   `allow_raw_gcode`, `allow_host_admin` are set by the user on purpose. If a
-   tool refuses, relay the refusal and its reason. Do not rephrase the call,
-   enable the flag, or find another tool that does the same thing.
+   export roots, raw G-code and host administration are set by the user on
+   purpose. If a tool refuses, relay the refusal and its reason. Do not
+   rephrase the call, enable the flag, or find another tool that does the
+   same thing.
 5. **When in doubt, stop and ask.** A paused printer wastes a little
    electricity; a wrong print wastes hours and filament; a bypassed gate can
    burn a house down. The user is always reachable — ask.
 
-## Preflight — every session that touches hardware
+## Choose the slicer, once per job
 
-1. `mcp-cura doctor` and `mcp-moonraker doctor` (local, read-only diagnostics).
-2. `moonraker_verify_connection` — connected? latency? Klipper ready, busy or
-   shut down?
-3. `cura_policy_info` and `moonraker_policy_info` — learn the active limits
-   (temperature caps, approval mode, read-only switches) before planning a
-   mutation.
-4. `moonraker_server_info` — confirm Klipper is `ready`, not `shutdown` or busy
-   with another job.
-5. Settle the plan with the user: **which printer, which material, which
-   nozzle, which quality, which file, how many copies, where on the bed.**
-   Do not guess.
+Pick the engine before importing. Artifact ids are local to one server; do not
+mix servers mid-job.
 
-If a server is missing or won't connect, say so and point the user at
-[references/troubleshooting.md](references/troubleshooting.md). Do not edit
-configs, install packages, or run `--force` anything just to make a check
-pass.
+1. Try **mcp-orca** first: run `mcp-orca doctor` (or `orca_doctor`) and
+   `orca_engine_info`. It is usable when the engine probe reports both
+   `available: true` (binary or image found) and
+   `slice_command_configured: true` (`engine.preset = "orca"` or a
+   `slice_command`). The doctor's overall `ok` can be true while the engine
+   entry is `"ok": false`; and `available: true` with
+   `slice_command_configured: false` still cannot slice. Read the engine
+   entry, not just the exit code.
+2. If mcp-orca is missing, fails to start, or has no engine configured, run
+   `mcp-cura doctor` and use **mcp-cura** for the whole job. Say which engine
+   you chose in one line; do not make the user re-ask.
+3. If neither is usable, stop and point at
+   [references/troubleshooting.md](references/troubleshooting.md). Do not
+   install packages or edit configs to force a check to pass.
+4. If Orca lacks a capability the job needs (boolean/offset/remesh/decimate),
+   say so and offer Cura. Switching engines means re-importing the model into
+   the other server and restarting at Stage 1 — never pass one server's
+   `artifact_id` to the other.
+
+Details, capability matrix and fallback dialogue:
+[references/engine-selection.md](references/engine-selection.md).
+
+## Job workspace and input discovery
+
+Every job gets one unique workspace. It is the only place where downloaded
+archives, extracted models and job notes live; never reuse a name or mix two
+jobs. Full rules: [references/job-workspace.md](references/job-workspace.md).
+
+1. If the user gives an **http(s) URL to a ZIP**, download it (512 MiB cap),
+   extract into a fresh `job_<UTC-timestamp>_<random-hex>` directory under a
+   platform-neutral temp root (`${TMPDIR:-/tmp}/3d-auto-fabrik/` — never a
+   client-specific path), and reject zip-slip, symlinks and nested-archive
+   auto-recursion.
+2. Otherwise, scan `model_downloaded/files/` recursively first (configurable;
+   do not create it) — including when the user gave a folder rather than one
+   file. It may be loosely organised; the goal is to find models. An explicit
+   single file the user names is checked directly but still listed for
+   confirmation.
+3. Recognise `.stl`, `.3mf`, `.obj`, `.amf`. A `.3mf` is **one** model
+   artifact (it is already a ZIP); never unzip it ourselves. List other files
+   as assets but do not import them; a found `.gcode` goes to the G-code-only
+   branch below.
+4. Always **show what was found and ask the user which file(s)** to use.
+   Never auto-pick by name or timestamp. Ask whether multiple models are
+   separate bed objects or one merged artifact (merge is a triangle soup).
+5. Import discovered bytes with the base64 `data` channel; never widen
+   `import_roots` for one job. Keep the workspace until the job ends and ask
+   before deleting it — including after cancel or abort.
+
+## Preflight gate — before every mutating stage
+
+Run this gate once per session and **repeat it at the start of every mutating
+stage** (import, slice, queue, print). Produce a readiness table; a red row
+blocks mutations, not read-only work.
+
+| Check | Tool | Green means |
+| --- | --- | --- |
+| Slicer health | `mcp-orca doctor` or `mcp-cura doctor` | server up; read the engine entry, not just overall `ok` |
+| Engine usable | `orca_engine_info` / `cura_engine_info` | `available: true` **and** `slice_command_configured: true` (or the Cura equivalent) |
+| Policies | `orca_policy_info` / `cura_policy_info`, `moonraker_policy_info` | caps, approval mode and read-only switches known |
+| Printer | `moonraker_verify_connection`, `moonraker_server_info`, `moonraker_config` (read-only) | connected; Klipper `ready`; facts for printer identity |
+| Queue | `moonraker_job_queue_status` | state and existing jobs known (a paused queue never auto-starts) |
+| Presets | `orca_profile_list` / `cura_profile_list` + user config | printer + filament + process (or Cura essentials) resolvable |
+
+Then settle the plan with the user: **which printer, which material, which
+nozzle, which quality/process preset, which file, how many copies, where on
+the bed.** Use the live MCP facts and the user config below; do not guess.
+
+If any row is red: report the tool's own words, stop all mutations, and let
+read-only work (mesh inspect, profile review) continue. Never install a
+package, edit a config or retry with altered arguments to make a row green.
+
+## Printer, material and profile configuration
+
+Load [references/printer-materials.md](references/printer-materials.md) when
+choosing a printer or material. Principles, not a hard-coded catalog:
+
+- The **live MCP config is the source of truth**: `orca_server_info` /
+  `orca_doctor`, `orca_profile_list`, both `*_policy_info`, and
+  `moonraker_config` / `moonraker_server_info` supply preset paths, hostname
+  and config facts. Read them every preflight.
+- User preferences live in `~/.config/3d-auto-fabrik/config.yaml` with an
+  optional `./3d-auto-fabrik.yaml` override: labels mapped to **exact** preset
+  ids, temp root, size cap. No tokens or secrets — those stay in MCP env.
+- Discovery order: MCP-indexed presets → ask the user for a preset directory
+  (read-only) → workspace custom profiles/overrides. Never edit slicer config
+  or `printer.cfg` to force a check to pass.
+- Every material label (PLA, ABS, PLA silk, PETG, …) must be mapped by the
+  user to a concrete filament/material preset. Never fuzzy-match a name; if
+  unmapped, ask. Shipped values are examples in the reference only.
+- Onboarding is optional and only when the user asks; it pre-fills that user
+  config from live MCP facts and writes nothing else.
 
 ## The pipeline
 
 Work stage by stage. Report briefly after each stage and pause for the user
 whenever a gate requires it.
 
-**Stage 0 — Plan.** Summarize the job in one paragraph (file, printer,
-material, nozzle, profile, copies, placement). Get the go-ahead.
+**Stage 0 — Plan.** Summarize the job in one paragraph (workspace path, file,
+engine, printer, material, nozzle, preset, copies, placement, queue or direct
+print). Get the go-ahead.
 
-**Stage 1 — Import.** `cura_artifact_import` with an absolute path under the
-configured import roots (`~/Downloads`, `~/Documents`, `~/Desktop`,
-`~/models` by default) — or with the base64 `data` parameter for a file
-outside the roots. The roots confine *filesystem paths*; the `data` path is
-the server's own supported channel for client-supplied bytes, not a bypass,
-and needs no policy change. If a path import is refused, re-import the same
-bytes via `data` (content-addressing returns the same artifact id) instead
-of stripping the job down to "I can't help". Record the returned
-`artifact_id` — every later step references it.
+**Stage 1 — Import.**
 
-**Stage 2 — Inspect & repair.** `cura_mesh_inspect` (bounds in mm, triangle
-count, watertight, volume, degenerate triangles). Then, as needed:
+- First discover and choose the file(s) in the job workspace as described
+  above. Discovered bytes go in through base64 `data`; a user-named path may
+  use `path` only when it is already under an import root.
+- Orca: `orca_artifact_import` with an absolute path under
+  `workspace.import_roots`, or with base64 `data` plus `name`. **The default
+  import roots are empty**, so path imports are disabled until the user
+  configures them; `data` is the sanctioned channel for client-supplied bytes
+  and needs no policy change.
+- Cura: `cura_artifact_import` with a path under its default roots
+  (`~/Downloads`, `~/Documents`, `~/Desktop`, `~/models`) or base64 `data`.
 
-- orientation / placement / scaling → `cura_mesh_transform`
-  (scale → rotate → translate, then `center_on_bed`)
-- non-manifold or messy surface → `cura_mesh_remesh` with a `voxel_size`, or
-  `cura_mesh_offset` to swell/shrink a closed mesh
-- several parts as one print → `cura_mesh_merge` (triangle soup) or
-  `cura_mesh_boolean` (a true union/subtract — voxel-based)
-- too many triangles → `cura_mesh_decimate` toward `target_triangles`
+If a path import is refused, re-import the same bytes via `data`
+(content-addressing returns the same artifact id) instead of stripping the
+job down to "I can't help". Record the returned `artifact_id` — every later
+step references it.
 
-Inspect again after every repair and quote the numbers. Medium-risk mesh ops
-are policy-gated but do not need approval; still, show the user what changed.
+**Stage 2 — Inspect & repair.** Always `orca_mesh_inspect` /
+`cura_mesh_inspect` first (bounds in mm, triangle count, watertightness,
+volume, degenerate triangles). Then:
 
-**Stage 3 — Resolve & verify the profile.** `cura_profile_list` to find
-definitions and quality profiles, then `cura_profile_resolve`
-(definition + quality + material + variant + intent). Read the warnings: Cura
-expressions it cannot evaluate, hard temperature violations. Then
-`cura_profile_verify` — errors must be zero before you slice. If they are
-not, fix the profile (or pick another) and say why. Never slice against a
-failing verify.
+| Need | mcp-orca | mcp-cura |
+| --- | --- | --- |
+| orient / place / scale / mirror | `orca_mesh_transform` (scale/mirror → rotate → translate) | `cura_mesh_transform` (+ `center_on_bed`) |
+| combine parts | `orca_mesh_merge` (triangle soup) | `cura_mesh_merge`, `cura_mesh_boolean` |
+| clean / thicken / simplify | not available | `cura_mesh_remesh`, `cura_mesh_offset`, `cura_mesh_decimate` |
 
-**Stage 4 — Slice.** `cura_slice(model_artifact_ids=[…], definition, quality,
-material, variant, intent, overrides?, name, wait=true, wait_timeout_secs)`.
-Respect `max_concurrent_jobs` (default 2). Poll with `cura_slice_status`;
-`cura_slice_wait` for short jobs; `cura_slice_cancel` only for queued/running
-jobs. If the slice fails, `cura_slice_status` carries the engine log tail —
-quote the actual error.
+Inspect again after every repair and quote the numbers. Mesh writes are
+policy-gated but not approval-gated; still, show the user what changed. If
+Orca cannot do a needed repair, do not pretend a merge is a boolean — offer
+Cura and restart at Stage 1.
 
-**Stage 5 — G-code review.** On the G-code artifact returned by the slice:
+**Stage 3 — Resolve the profile.**
 
-- `cura_gcode_inspect` — estimated time, filament, layer count, Z range, max
-  temperatures, suspicious commands.
-- `cura_gcode_verify` — dangerous commands, temperatures vs. local policy,
-  missing heater shutdown / stepper disable / metadata.
-- If something is missing, `cura_gcode_prepare` creates a *new* artifact with
-  a safe shutdown sequence (or full end sequence). When you use it, carry the
-  **new** artifact id forward — the original is untouched.
+- Orca needs three native `.json` presets: **printer + filament + process**
+  (no invented defaults). Use `orca_profile_list` to find them, then
+  `orca_profile_resolve` with `printer`, `filament`, `process`, and optional
+  `overrides`. Check `resolution[]` sources and read every warning. A
+  `settings_complete: false` for native presets is normal: Orca resolves
+  those files by reference at slice time. There is no `orca_profile_verify`;
+  the final G-code is the verification surface (Stage 5). Repeatable
+  overrides belong in a workspace profile: `orca_profile_create` with
+  `base_profile` + `settings`.
+- Cura: `cura_profile_list` → `cura_profile_resolve` (definition + quality +
+  material + variant + intent) → `cura_profile_verify`. Errors must be zero
+  before slicing.
 
-Then **show the user the summary** — time, filament, hottest temperature,
-verify result — and get explicit confirmation before Stage 6. This is the
-last cheap chance to abort.
+**Stage 4 — Slice.**
+
+- Orca: `orca_slice(model_artifact_ids=[…], printer, filament, process,
+  overrides?, profiles?, name, wait=true, wait_timeout_secs)`. Slicing fails
+  clearly when no engine invocation is configured. Respect
+  `max_concurrent_jobs` (default 2); poll `orca_slice_status`, or
+  `orca_slice_wait` for short jobs. `orca_slice_cancel` is for queued/running
+  jobs only.
+- Cura: `cura_slice(model_artifact_ids=[…], definition, quality, material,
+  variant, intent, overrides?, name, wait=true, wait_timeout_secs)`. Same job
+  rules; poll `cura_slice_status` / `cura_slice_wait` / `cura_slice_cancel`.
+
+If a slice fails, quote the actual engine error from the job status — never
+guess at a cause.
+
+**Stage 5 — G-code review.** This is the last cheap chance to abort.
+
+- Orca: `orca_gcode_inspect` reports time, filament, layers, Z range and
+  maximum nozzle/bed temperatures, but **does not detect dangerous commands**.
+  Read the header and footer with `orca_artifact_read_text` (first ~200 and
+  last ~120 lines). Confirm:
+  - max temperatures are within `moonraker_policy_info` caps and the
+    material's limits;
+  - the end sequence turns heaters off (`M104 S0` / `M140 S0`), parks/lifts,
+    and disables steppers (`M84`);
+  - no unexpected `M112`, `M502`, `M500`, mid-file `G28`, or raw commands the
+    profile should not contain.
+  If the end sequence is wrong or dangerous commands are present, re-slice
+  with a corrected process preset. mcp-orca has no G-code rewrite tool — do
+  not hand-edit the artifact.
+- Cura: `cura_gcode_inspect` + `cura_gcode_verify`. If shutdown or steppers
+  are missing, `cura_gcode_prepare` creates a *new* artifact; carry the new
+  id forward. Dangerous commands mean re-slice, never a hand edit.
+
+Then **show the user the summary** — engine, time, filament, hottest
+temperature, review result — and get explicit confirmation before Stage 6.
+
+**Branch — the user supplied ready-made G-code.** Skip Stages 2–4 and do not
+pretend the file was sliced. Import it as `kind: "gcode"`, then run the Stage 5
+review plus a printer-compatibility check: temperature maxima against
+`moonraker_policy_info` caps and the selected material's limits; move bounds
+against the selected printer profile's build volume; heater-off and
+stepper-disable in the footer; no dangerous commands; and any macro or
+firmware requirement visible in read-only `moonraker_config` /
+`moonraker_list_macros`. Report a clear PASS/FAIL with the tool evidence.
+Then **stop** — no queue, no transfer, no print unless the user asks in a
+separate turn. A failed check is reported verbatim; with no mesh there is no
+"just re-slice" fix, and the G-code is never hand-edited.
 
 **Stage 6 — Transfer to the printer.** The G-code artifact must exist in the
-printer's `gcodes` root. The MCP servers expose no upload tool; the supported
-paths are:
+printer's `gcodes` root. No server exposes an upload tool; the supported paths
+are:
 
-- `cura_artifact_export` to an export root the printer can read (a mounted
-  share/USB the printer watches), or
+- `orca_artifact_export` or `cura_artifact_export` to an export root the
+  printer can read (a mounted share/USB the printer watches), or
 - the user copies the file there themselves (web UI, SCP, the share), or
 - if — and only if — the user explicitly asks, the Moonraker HTTP upload
   endpoint as a clearly logged one-off.
 
+Orca export is approval-gated: the first call returns a pending approval id;
+the user decides via `orca_approval_decide` (in-band/both) or
+`mcp-orca approvals approve <id>` (out-of-band), then you retry the
+**identical** call. Cura export is prepare → `cura_confirm_action`.
+
 Before touching the printer, confirm the file arrived:
 `moonraker_files_list` (root `gcodes`) and `moonraker_file_metadata` —
-estimated time and filament should match the Cura output.
+estimated time and filament should match the slicer output.
 
-**Stage 7 — Print.** Before `moonraker_print_start`:
+**Stage 7 — Queue or print.** Choose with the user; both paths need the same
+readiness checks.
 
-- `moonraker_printer_status` shows Klipper ready and idle, not shut down or
-  busy; `moonraker_temperatures` shows sane ambient readings.
-- Bed is clear, correct plate, correct material loaded, door closed — ask
-  the user; you cannot see it.
-- The user confirms the exact filename. `moonraker_print_start` prepares a
-  high-risk action; relay the approval prompt and wait for approval, then
-  `moonraker_confirm_action` with the phrase and `acknowledge=true`.
+- Direct print: `moonraker_printer_status` shows Klipper ready and idle, not
+  shut down or busy; `moonraker_temperatures` shows sane ambient readings.
+  Bed is clear, correct plate, correct material loaded, door closed — ask the
+  user; you cannot see it. The user confirms the exact filename.
+  `moonraker_print_start` prepares a high-risk action; relay the approval
+  prompt and wait for approval, then `moonraker_confirm_action` with the
+  phrase and `acknowledge=true`.
+- Optional queue: `moonraker_job_queue_status` first, then
+  `moonraker_job_queue_add` with the exact filename in the `gcodes` root. A
+  paused queue stays paused — `moonraker_job_queue_start` only after explicit
+  confirmation. Show the queue again so the user sees what is waiting.
 
-During the print: poll `moonraker_printer_status` and
+During the print (or when a queued job loads): poll `moonraker_printer_status` and
 `moonraker_temperatures`; use `moonraker_camera_snapshot` for a visual check
 when something seems off; `moonraker_gcode_history` when commands fail. To
 hold the print for inspection use `moonraker_print_pause` → inspect →
@@ -169,29 +312,42 @@ hold the print for inspection use `moonraker_print_pause` → inspect →
 double confirmation) — only when the user asks. Afterwards,
 `moonraker_print_history` records the outcome.
 
-**Post-print.** Heaters should be off (the end sequence does it — verify with
-`moonraker_temperatures`). Remind the user to clear the plate. If the user
-wants the artifacts cleaned up, list them (`cura_artifact_list`) and only
-delete with explicit confirmation — `cura_artifact_delete` is high risk.
+**Post-print and cleanup.** Heaters should be off (the end sequence does it —
+verify with `moonraker_temperatures`). Remind the user to clear the plate. If
+the user wants artifacts cleaned up, list them (`orca_artifact_list` /
+`cura_artifact_list`) and only delete with explicit confirmation —
+`*_artifact_delete` is high risk. Offer the same for the per-job workspace;
+delete it only after explicit confirmation, and offer it on cancel/abort too.
 
 ## Approvals in one breath
 
-Approval modes (`in_band`, `out_of_band`, `both`) are configured per server in
-`[approval]`. In every mode, one prepared action = one `approval_id` = a
-single-use confirmation phrase with a short TTL (default 120 s). The stored
-tool and arguments from the prepare call are what execute; arguments given to
-`*_confirm_action` are decorative. `*_pending_approvals` re-lists what is
-waiting; `moonraker_cancel_approval` / `mcp-cura deny <id>` void an action
-before it runs. Full protocol: `references/safety-approvals.md`.
+One prepared action = one single-use approval with a short TTL (default
+120 s). The stored tool and arguments are what execute; arguments supplied
+later are decorative.
+
+| Server | Prepare | Decide | Then |
+| --- | --- | --- | --- |
+| mcp-orca | first gated call returns `apr_…` | `orca_approval_decide` (in-band/both) or `mcp-orca approvals approve <id>` | retry the **identical** call once |
+| mcp-cura | first gated call returns `approval_id` + phrase | user reads/approves in chat, or `mcp-cura approve <id>` | `cura_confirm_action` with phrase + `acknowledge=true` |
+| mcp-moonraker | first gated call returns `approval_id` + phrase | user reads/approves in chat, or `mcp-moonraker approve <id>` | `moonraker_confirm_action` with phrase + `acknowledge=true` |
+
+`*_pending_approvals` re-lists what is waiting; `moonraker_cancel_approval` /
+`mcp-orca approvals deny <id>` / `mcp-cura deny <id>` void an action before it
+runs. Full protocol: [references/safety-approvals.md](references/safety-approvals.md).
 
 ## Quick reference — where to read more
 
+- [references/setup.md](references/setup.md) — environment check, MCP verification, and explicitly-confirmed defaults
+- [references/engine-selection.md](references/engine-selection.md) — Orca vs Cura, fallback rules, artifact transfer
+- [references/job-workspace.md](references/job-workspace.md) — URL/ZIP download, unique workspace, model discovery, archive safety, cleanup
+- [references/printer-materials.md](references/printer-materials.md) — live MCP config, printer/material mapping, preset discovery, onboarding
 - [references/pipeline.md](references/pipeline.md) — expanded stage walkthrough with an example dialog
-- [references/mcp-cura-tools.md](references/mcp-cura-tools.md) — all 32 mcp-cura tools: risk, gate, arguments
-- [references/mcp-moonraker-tools.md](references/mcp-moonraker-tools.md) — all 49 mcp-moonraker tools likewise
+- [references/mcp-orca-tools.md](references/mcp-orca-tools.md) — all mcp-orca tools: risk, gate, arguments
+- [references/mcp-cura-tools.md](references/mcp-cura-tools.md) — all mcp-cura tools likewise
+- [references/mcp-moonraker-tools.md](references/mcp-moonraker-tools.md) — all mcp-moonraker tools likewise
 - [references/safety-approvals.md](references/safety-approvals.md) — approval modes, refusal rules, emergency handling
 - [references/troubleshooting.md](references/troubleshooting.md) — doctor output, common failures, fixes
-- [scripts/check-setup.sh](scripts/check-setup.sh) — verify both servers are installed and reachable
+- [scripts/check-setup.sh](scripts/check-setup.sh) — verify the servers are installed and reachable
 
 Installation and per-platform MCP/skill registration live in the repository
 docs (`docs/platforms.md`), not in this skill — load them when the user asks

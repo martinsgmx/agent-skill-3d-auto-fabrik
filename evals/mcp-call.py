@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """evals/mcp-call.py — minimal stdio JSON-RPC driver for the eval harness.
 
-NOT part of the skill. This lets eval agents talk to the two MCP servers
+NOT part of the skill. This lets eval agents talk to the MCP servers
 through the shell in environments where the client has no MCP registration.
 Read the safety notes in evals/README.md before using.
 
 Usage:
+  python3 evals/mcp-call.py mcp-orca <tool> ['<json-args>']
   python3 evals/mcp-call.py mcp-cura <tool> ['<json-args>']
   python3 evals/mcp-call.py mcp-moonraker <tool> ['<json-args>']
 
