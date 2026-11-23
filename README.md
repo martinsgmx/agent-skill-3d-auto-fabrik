@@ -11,11 +11,11 @@
 orchestrates three MCP servers to take a 3D model from a mesh file to a
 supervised Klipper print:
 
-| Server | Job | License | Source |
-| --- | --- | --- | --- |
-| `mcp-orca` (preferred) | OrcaSlicer presets, mesh inspect/transform/merge, slice jobs, G-code inspect | Apache-2.0 | sibling repository |
-| [`mcp-cura`](https://github.com/martinsgmx/mcp-cura) (fallback) | CuraEngine profiles, richer mesh repair, slice jobs, G-code verify/prepare | MIT | sibling repository |
-| [`mcp-moonraker`](https://github.com/martinsgmx/mcp-moonraker) | printer state, temperatures, camera, pause/resume/cancel, print start, job queue | MIT | published sibling repository |
+| Server                                                          | Job                                                                              | License    | Source                       |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------- | ---------------------------- |
+| `mcp-orca` (preferred)                                          | OrcaSlicer presets, mesh inspect/transform/merge, slice jobs, G-code inspect     | Apache-2.0 | sibling repository           |
+| [`mcp-cura`](https://github.com/martinsgmx/mcp-cura) (fallback) | CuraEngine profiles, richer mesh repair, slice jobs, G-code verify/prepare       | MIT        | sibling repository           |
+| [`mcp-moonraker`](https://github.com/martinsgmx/mcp-moonraker)  | printer state, temperatures, camera, pause/resume/cancel, print start, job queue | MIT        | published sibling repository |
 
 This repository contains **the skill only** — the servers live in their own
 repositories and are installed separately. The skill teaches any
@@ -166,12 +166,12 @@ repos/
 3. **Install the skill.** There is nothing to build — the skill is markdown.
    Point your agent at `skills/3d-auto-fabrik/`:
 
-   | Client | Install |
-   | --- | --- |
-   | OpenCode | `cp -r skills/3d-auto-fabrik ~/.config/opencode/skills/` (or project `.opencode/skills/`, or `.agents/skills/`) |
-   | Claude Code | `cp -r skills/3d-auto-fabrik ~/.claude/skills/` (or project `.claude/skills/`) |
-   | Gemini CLI | `cp -r skills/3d-auto-fabrik ~/.agents/skills/` — or `gemini skills install <this-repo-url> --consent --path skills/3d-auto-fabrik` |
-   | Generic Agent Skills clients | copy/symlink `skills/3d-auto-fabrik/` into the client's skills directory |
+   | Client                       | Install                                                                                                                                                                      |
+   | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | OpenCode                     | `cp -r skills/3d-auto-fabrik ~/.config/opencode/skills/` (or project `.opencode/skills/`, or `.agents/skills/`)                                                              |
+   | Claude Code                  | `cp -r skills/3d-auto-fabrik ~/.claude/skills/` (or project `.claude/skills/`)                                                                                               |
+   | Gemini CLI                   | `cp -r skills/3d-auto-fabrik ~/.agents/skills/` — or `gemini skills install https://github.com/martinsgmx/agent-skill-3d-auto-fabrik --consent --path skills/3d-auto-fabrik` |
+   | Generic Agent Skills clients | copy/symlink `skills/3d-auto-fabrik/` into the client's skills directory                                                                                                     |
 
    The skill ID is `3d-auto-fabrik` (the folder name must match `name`).
    Symlinking instead of copying works well for development — the client
@@ -181,10 +181,10 @@ repos/
    commands, copy `commands/setup-3d-fabrik.md` so you can run
    `/setup-3d-fabrik`:
 
-   | Client | Command install |
-   | --- | --- |
-   | OpenCode | `cp commands/setup-3d-fabrik.md ~/.config/opencode/commands/` (or project `.opencode/commands/`) |
-   | Claude Code | `cp commands/setup-3d-fabrik.md ~/.claude/commands/` (or project `.claude/commands/`) |
+   | Client        | Command install                                                                                                            |
+   | ------------- | -------------------------------------------------------------------------------------------------------------------------- |
+   | OpenCode      | `cp commands/setup-3d-fabrik.md ~/.config/opencode/commands/` (or project `.opencode/commands/`)                           |
+   | Claude Code   | `cp commands/setup-3d-fabrik.md ~/.claude/commands/` (or project `.claude/commands/`)                                      |
    | Other clients | copy the file into the client's command/prompt directory, or paste its contents as a saved prompt named `/setup-3d-fabrik` |
 
 4. **Run the setup check.** Before the first real job, verify the local
