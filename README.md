@@ -11,11 +11,11 @@
 orchestrates three MCP servers to take a 3D model from a mesh file to a
 supervised Klipper print:
 
-| Server                                                          | Job                                                                              | License    | Source                       |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------- | ---------------------------- |
-| `mcp-orca` (preferred)                                          | OrcaSlicer presets, mesh inspect/transform/merge, slice jobs, G-code inspect     | Apache-2.0 | sibling repository           |
-| [`mcp-cura`](https://github.com/martinsgmx/mcp-cura) (fallback) | CuraEngine profiles, richer mesh repair, slice jobs, G-code verify/prepare       | MIT        | sibling repository           |
-| [`mcp-moonraker`](https://github.com/martinsgmx/mcp-moonraker)  | printer state, temperatures, camera, pause/resume/cancel, print start, job queue | MIT        | published sibling repository |
+| Server                 | Job                                                                              | License    | Repository                                                                           |
+| ---------------------- | -------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------ |
+| `mcp-orca` (preferred) | OrcaSlicer presets, mesh inspect/transform/merge, slice jobs, G-code inspect     | Apache-2.0 | [martinsgmx/mcp-orca](https://github.com/martinsgmx/mcp-orca)                         |
+| `mcp-cura` (fallback)  | CuraEngine profiles, richer mesh repair, slice jobs, G-code verify/prepare       | MIT        | [martinsgmx/mcp-cura](https://github.com/martinsgmx/mcp-cura)                         |
+| `mcp-moonraker`        | printer state, temperatures, camera, pause/resume/cancel, print start, job queue | MIT        | [martinsgmx/mcp-moonraker](https://github.com/martinsgmx/mcp-moonraker)              |
 
 This repository contains **the skill only** — the servers live in their own
 repositories and are installed separately. The skill teaches any
@@ -55,8 +55,10 @@ between servers and never silently switches mid-job.
 
 The capability differences matter: Orca has inspect/transform/merge and a
 G-code **inspect** tool; Cura adds boolean/offset/remesh/decimate, profile
-verify, and G-code **verify/prepare**. The skill tells the agent when a job
-needs the fallback. Details:
+verify, and G-code **verify/prepare**. Orca's inspect reports statistics only —
+it does **not** scan for dangerous commands, so that check needs Cura (or a
+manual header/footer read). The skill tells the agent when a job needs the
+fallback. Details:
 [skills/3d-auto-fabrik/references/engine-selection.md](skills/3d-auto-fabrik/references/engine-selection.md).
 
 ## Inputs and configuration
@@ -67,7 +69,7 @@ Each job gets a unique temp workspace
 models are discovered and listed, and you pick which one(s) to use. A `.3mf`
 is one model, found G-code is validated, and nothing is auto-selected or
 auto-deleted. See
-[references/job-workspace.md](skills/3d-auto-fabrik/references/job-workspace.md).
+[skills/3d-auto-fabrik/references/job-workspace.md](skills/3d-auto-fabrik/references/job-workspace.md).
 
 Printers and materials come from the **live MCP configuration** first
 (`orca_server_info`/`orca_doctor`/`orca_profile_list`, or Cura equivalents,
@@ -76,7 +78,7 @@ plus read-only `moonraker_config`/`moonraker_server_info`/
 `~/.config/3d-auto-fabrik/config.yaml` (optional `./3d-auto-fabrik.yaml`
 override); no secrets go in that file. If a label is unmapped, the agent asks.
 See
-[references/printer-materials.md](skills/3d-auto-fabrik/references/printer-materials.md).
+[skills/3d-auto-fabrik/references/printer-materials.md](skills/3d-auto-fabrik/references/printer-materials.md).
 
 ## What you need
 
@@ -85,9 +87,11 @@ See
 - [OrcaSlicer](https://github.com/SoftFever/OrcaSlicer) for the preferred
   engine, **or** [CuraEngine](https://github.com/Ultimaker/CuraEngine) for the
   fallback. Mesh-only work needs neither.
-- Rust 1.89+ to build the servers from source.
-- An agent client that supports both Agent Skills and MCP (OpenCode, Claude
-  Code/Desktop, Gemini CLI, Cursor, Windsurf, …).
+- The three MCP servers installed and on your PATH — see Quickstart below. The
+  skill does not install or configure them.
+- An agent client that can register stdio MCP servers and load Agent Skills —
+  or a persistent-instructions file you can paste `SKILL.md` into (OpenCode,
+  Claude Code/Desktop, Gemini CLI, Cursor, Windsurf, …).
 - Python 3 only for this repo's tooling (validator, evals) — not for using
   the skill itself.
 
@@ -106,64 +110,26 @@ skill-3d-auto-fabrik/
 
 ## Quickstart
 
-The MCP servers ship as Rust binaries built from sibling repositories — this
-workspace layout is the supported install path:
+The three MCP servers are installed and configured separately. Follow the
+instructions in each server's own repository — this skill does not install or
+configure them, it only needs their binaries on your PATH:
 
-```text
-repos/
-├── skill-3d-auto-fabrik/   ← this repository
-├── mcp-orca/               ← preferred slicing MCP server
-├── mcp-cura/               ← optional fallback slicing MCP server
-└── mcp-moonraker/          ← the printer MCP server (git clone https://github.com/martinsgmx/mcp-moonraker)
-```
+- [mcp-orca](https://github.com/martinsgmx/mcp-orca) — preferred slicing server.
+- [mcp-cura](https://github.com/martinsgmx/mcp-cura) — optional fallback.
+- [mcp-moonraker](https://github.com/martinsgmx/mcp-moonraker) — printer server.
 
-1. **Build and install the servers** (requires Rust 1.89+):
+A missing slicer binary is only a warning: slicing stays disabled until an
+engine is configured. `Klipper state=error` means the printer's MCU is not
+connected, not a problem in this stack. For configuration details, see
+[docs/configuration.md](docs/configuration.md) and the server repositories.
 
-   ```sh
-   cargo install --path ../mcp-orca
-   cargo install --path ../mcp-cura      # optional fallback
-   cargo install --path ../mcp-moonraker
-
-   mkdir -p ~/.config/mcp-orca
-   mcp-orca init --output ~/.config/mcp-orca/mcp-orca.toml
-
-   mcp-orca doctor --config ~/.config/mcp-orca/mcp-orca.toml   # engine, workspace, profiles (JSON)
-   mcp-cura doctor          # CuraEngine, workspace, profiles
-   mcp-moonraker doctor     # Moonraker connectivity, Klipper state, cameras
-   ```
-
-   mcp-orca reads no config file unless you pass `--config` or set
-   `MCP_ORCA_CONFIG`. Register it with that env var (the examples show it).
-
-   Adjust the paths to wherever the siblings live on your machine. A healthy
-   `mcp-orca doctor` reports the engine entry as `"ok": true`; if the binary
-   is missing it still prints a full report with `"ok": false` on `engine`
-   and a `detail` explaining what to configure. Slicing is disabled until
-   `engine.preset = "orca"` (or a `slice_command`) is set and `orca-slicer`
-   is reachable.
-
-   `mcp-moonraker doctor` reports whether Moonraker answers, the Klipper
-   state (`ready` vs `error`/`shutdown`), and camera configuration:
-
-   ```text
-   [OK  ] Moonraker        reachable at http://127.0.0.1:7125 (Moonraker v0.11.0, API 1.5.0)
-   [WARN] Klipper          state=error: mcu 'mcu': Unable to connect ...
-   [OK  ] cameras          1 configured, 1 enabled, 1 with snapshots
-   ```
-
-   (A `Klipper state=error` warning means the printer's MCU is not
-   connected — usually a powered-off printer or a firmware fault to fix on
-   the printer itself, not in this stack.) See
-   [docs/configuration.md](docs/configuration.md) for TOML config,
-   environment variables and approval modes.
-
-2. **Register the servers as MCP servers** in your client —
+1. **Register the servers as MCP servers** in your client —
    copy-paste snippets for OpenCode, Claude, Gemini CLI, Cursor and Windsurf
    live in [docs/platforms.md](docs/platforms.md) and [examples/](examples/).
    Tools are prefixed server-side (`orca_*`, `cura_*`, `moonraker_*`), so they
    don't collide whichever client key you register them under.
 
-3. **Install the skill.** There is nothing to build — the skill is markdown.
+2. **Install the skill.** There is nothing to build — the skill is markdown.
    Point your agent at `skills/3d-auto-fabrik/`:
 
    | Client                       | Install                                                                                                                                                                      |
@@ -187,7 +153,7 @@ repos/
    | Claude Code   | `cp commands/setup-3d-fabrik.md ~/.claude/commands/` (or project `.claude/commands/`)                                      |
    | Other clients | copy the file into the client's command/prompt directory, or paste its contents as a saved prompt named `/setup-3d-fabrik` |
 
-4. **Run the setup check.** Before the first real job, verify the local
+3. **Run the setup check.** Before the first real job, verify the local
    environment and MCP health:
 
    ```sh
@@ -206,7 +172,7 @@ repos/
    defaults. It never edits server configs, never stores secrets, and never
    touches hardware.
 
-5. **Ask your agent to do real work**, for example:
+4. **Ask your agent to do real work**, for example:
 
    > "Slice ~/Downloads/bracket.stl for the Voron in PETG, 0.2 process,
    > then print it after I confirm the G-code."
@@ -214,7 +180,7 @@ repos/
    The agent should choose an engine, import → inspect → resolve → slice →
    review G-code → show you the estimate → wait for your go → transfer →
    confirm → start the print. If it tries to skip a gate, point it at
-   `references/safety-approvals.md`.
+   [skills/3d-auto-fabrik/references/safety-approvals.md](skills/3d-auto-fabrik/references/safety-approvals.md).
 
 ## Usage examples
 
@@ -267,6 +233,20 @@ Claude.ai (the web app) doesn't launch local stdio binaries; use Claude Code
 or Claude Desktop with `claude_desktop_config.json`, or put the servers
 behind HTTP transport with authentication. See the platforms doc.
 
+## Troubleshooting
+
+- **A tool "doesn't exist"** — check client-side tool filters first, then the
+  server's policy. [docs/platforms.md](docs/platforms.md) lists common filters;
+  `orca_policy_info` / `cura_policy_info` / `moonraker_policy_info` show the
+  server side.
+- **Slicing fails but `doctor` looks fine** — read `orca_engine_info` /
+  `cura_engine_info`: `doctor`'s overall `ok` can hide an unwired engine. The
+  session guide covers engine wiring, custom `slice_command`, imports, G-code
+  review, transfer and print:
+  [skills/3d-auto-fabrik/references/troubleshooting_mcps.md](skills/3d-auto-fabrik/references/troubleshooting_mcps.md).
+- **Refused imports/exports, profile-list misses, G-code discrepancies** —
+  [skills/3d-auto-fabrik/references/troubleshooting.md](skills/3d-auto-fabrik/references/troubleshooting.md).
+
 ## Safety
 
 This software drives a heated machine. Read
@@ -280,22 +260,24 @@ see [SECURITY.md](SECURITY.md) and do not open a public issue.
 
 ## Status
 
-`v0.2.0` — pre-1.0. The skill, tool catalogs and docs may change between
-releases; pin a commit if you need stability. Notable changes are tracked in
-[CHANGELOG.md](CHANGELOG.md).
+`0.2.5` (skill metadata) — pre-1.0. The `0.2.5` changes are still under
+`[Unreleased]` in [CHANGELOG.md](CHANGELOG.md); the last dated entry is `0.2.0`
+(2026-11-19). The skill, tool catalogs and docs may change between releases;
+pin a commit if you need stability.
 
 ## Development
 
 ```sh
 python3 scripts/validate-skill.py             # validate the skill
 python3 scripts/generate-tool-reference.py    # refresh references after server upgrades
-python3 scripts/grade-eval.py                 # grade an eval iteration in ../skill-3d-auto-fabrik-workspace
+python3 scripts/grade-eval.py iteration-1     # grade ../skill-3d-auto-fabrik-workspace/iteration-1
 sh skills/3d-auto-fabrik/scripts/check-setup.sh   # verify binaries on PATH
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Test prompts for evaluating the
 skill live in [evals/evals.json](evals/evals.json); the harness, safety
-rails, and grading notes are in [evals/README.md](evals/README.md).
+rails, and grading notes are in [evals/README.md](evals/README.md). The
+harness calls the servers through `evals/mcp-call.py` (stdio JSON-RPC).
 
 ## License
 
