@@ -10,14 +10,16 @@ domain. If mcp-orca is unavailable, the skill falls back to mcp-cura.
 | --- | --- | --- |
 | Server not found | `which mcp-orca` | build from the sibling repo: `cargo install --path <path>/mcp-orca` |
 | `doctor` says engine unavailable | `mcp-orca doctor`, `orca_engine_info` | Install `orca-slicer`; set `[engine] preset = "orca"` (and `binary`) or a `slice_command`; for Docker set `runner = "docker"` + `docker_image` |
-| No profiles found | `orca_profile_list`, `mcp-orca doctor` | Set `[profiles] search_paths`, open Orca once so it writes its presets, or pass explicit `.json` paths; then `orca_profile_refresh` |
+| No profiles found | `orca_profile_list`, `orca_profile_get`, `mcp-orca doctor` | The list is a bounded index, not proof of absence: try an exact path with `orca_profile_resolve` before concluding unavailable. User may set `[profiles] search_paths` or open Orca once, then `orca_profile_refresh` |
 | "missing printer/filament/process" | `orca_profile_resolve` error | Orca requires all three native presets; no invented defaults. Pick them from `orca_profile_list` |
 | "did not resolve to a .json file" | resolve/selection warnings | Pass a preset path, add its directory to `search_paths`, or set `base_profile` on the workspace profile artifact |
 | Import rejected | `orca_policy_info`, `print-config` | `workspace.import_roots` defaults to empty. Import via base64 `data`, or ask the owner to add a root |
+| Imported mesh shows `kind:other` / "not a mesh" | `orca_artifact_get`, then `orca_mesh_inspect` only if the kind is `mesh` | (agent-side) Report metadata verbatim; re-import original bytes with explicit `kind`/`format`. Same content-addressed id means an upstream classification issue — stop/ask. A harmless header change is a last-resort diagnostic, never a geometry fix |
 | Export refused | `orca_policy_info`, `print-config` | `workspace.export_roots` defaults to empty. Add a root, or have the user copy the file |
 | Slice fails instantly | `orca_slice_status` → `error` | Usually no engine invocation configured, or a preset that is not native `.json`; quote the error |
 | Slice hangs | `orca_slice_status` | `orca_slice_cancel`; check `engine.timeout_secs` and `max_concurrent_jobs` |
 | G-code review feels thin | `orca_gcode_inspect` output | Orca has no verify tool. Read header/footer with `orca_artifact_read_text`; re-slice if the end sequence is wrong |
+| Inspect numbers disagree with the G-code header | `orca_gcode_inspect`, `orca_artifact_read_text`, `moonraker_file_metadata` after transfer | (agent-side) Cross-check inspect vs header/config summary vs Moonraker metadata and report the discrepancy. Do not block on a numbers-only mismatch; temperatures, dangerous commands, heater-off and `M84` still gate. Never hand-edit |
 | "approval expired" / pending | `orca_pending_approvals` | Re-run the gated call; TTL is short by design |
 
 ## mcp-cura
@@ -63,6 +65,18 @@ domain. If mcp-orca is unavailable, the skill falls back to mcp-cura.
   ones are dead — re-prepare.
 - **Engine choice**: if `mcp-orca doctor` fails but `mcp-cura doctor` is
   healthy, use Cura for the whole job. Do not pass artifact ids between them.
+- **User names a Cura profile but Cura is unavailable**: say so, search the
+  active slicer for the same/closest preset name, show exact ids/paths, and
+  require explicit confirmation before using an Orca preset. Never silently
+  substitute — see `engine-selection.md`.
+- **Large import in Code Mode**: `node:fs` may be unavailable and `file://`
+  fetch blocked. Use the scoped, localhost-only staging pattern in
+  `job-workspace.md`; kill the helper server and delete staged bytes in the
+  same turn, including on failure.
+- **No export root / no upload tool**: use the transfer decision table in
+  `pipeline.md`. A same-host copy is an explicitly requested, logged exception
+  with SHA-256 and Moonraker metadata verification — never a silent widening
+  of export roots.
 
 ## Getting help
 

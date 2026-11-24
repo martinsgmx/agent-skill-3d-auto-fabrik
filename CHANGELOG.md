@@ -21,6 +21,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   illustrative material temperatures.
 - A single preflight gate repeated before every mutating stage.
 - Evals 5 and 6: URL/ZIP discovery and ready-made G-code validation.
+- Cura-name ambiguity decision rule and dialogue: when no mcp-cura tools are
+  present, report that, search the active slicer by preset name and require
+  explicit confirmation before substituting an Orca preset.
+- Three fill-in templates in SKILL.md: Plan confirmation, Stage 5 review and
+  Print start.
+- Stage 6 transfer decision table, including an explicitly requested same-host
+  copy verified with SHA-256, `moonraker_files_list` and
+  `moonraker_file_metadata`.
+- Artifact-metadata check after import, G-code inspect vs header/summary vs
+  Moonraker cross-check, and a scoped Code Mode large-import pattern.
+- Evals 7 and 8: Cura-name ambiguity and G-code inspect discrepancy reporting.
 
 ### Changed
 - Printer and material choices now come from live MCP configuration plus an
@@ -30,6 +41,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   describe the new workspace, discovery, preflight and queue stages. The
   skill remains platform-agnostic: only install paths and MCP registration
   differ between OpenCode, Claude and generic clients.
+- `*_profile_list` is documented as a bounded index, not proof of absence;
+  profile discovery falls back to exact paths via `*_profile_get` and
+  `*_profile_resolve` before concluding a preset is missing.
+- Troubleshooting covers `kind:other` imports, profile-list misses and
+  inspect/summary discrepancies; stage reports now carry the `art_*`, `job_*`
+  and `apr_*` ids and exact filenames. Skill version bumped to 0.2.5.
 
 ## [0.2.0] - 2026-11-19
 

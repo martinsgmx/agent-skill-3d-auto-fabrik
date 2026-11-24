@@ -52,6 +52,12 @@ Red blocks mutations, not read-only inspection. Quote the failing tool's own
 words; never install, edit config or retry with altered arguments. Details:
 `references/printer-materials.md`.
 
+`*_profile_list` is a bounded index, not proof of absence: use `*_profile_get`
+and an explicit path with `*_profile_resolve` before calling a preset
+unavailable, and say what discovery scope you checked. If the user named a
+"Cura profile" but Cura is unavailable, apply the decision rule in
+`references/engine-selection.md` rather than substituting quietly.
+
 ## Stage details and pitfalls
 
 ### Stage 1 — Import
@@ -72,6 +78,12 @@ words; never install, edit config or retry with altered arguments. Details:
   the refusal as "import is impossible".
 - `kind` can hint `mesh` / `gcode` / `profile`; pass `format: "stl"` (or the
   right format) when unsure.
+- After import, call `orca_artifact_get` / `cura_artifact_get` and assert
+  `kind` and `format` before any mesh work. `kind: "other"` on an STL is not a
+  mesh: report the metadata verbatim, re-import the original bytes with
+  explicit arguments, and if content-addressing returns the same id treat it
+  as an upstream classification issue. Never run `*_mesh_inspect` on a suspect
+  artifact and never alter geometry to force a classification.
 
 ### Stage 2 — Inspect & repair
 
@@ -95,6 +107,10 @@ words; never install, edit config or retry with altered arguments. Details:
   quality/material/variant/intent come from `cura_profile_list`.
   `cura_profile_resolve` warns about unevaluatable Cura expressions; quote
   warnings to the user. `cura_profile_verify` must return zero errors.
+- For both engines: `*_profile_list` is a bounded index, not proof of absence.
+  If a user preset is missing, use `*_profile_get` / an exact configured path
+  and resolve explicitly; report the discovery scope. Never edit search paths
+  or config to make a preset appear.
 
 ### Stage 4 — Slice
 
@@ -120,7 +136,17 @@ words; never install, edit config or retry with altered arguments. Details:
   temp above policy, missing heater shutdown, missing stepper disable, missing
   metadata. `cura_gcode_prepare` adds shutdown/end sequence and returns a new
   artifact — carry the new id forward. Dangerous commands mean re-slice.
-- Always show the user the summary and get explicit confirmation before
+- Cross-check informational numbers: `*_gcode_inspect` against the G-code's
+  own header/config summary (`total layer number`, `total layers count`,
+  `filament used [mm]`, temperatures) and, after transfer, against
+  `moonraker_file_metadata`. Report discrepancies explicitly; do not treat one
+  source as authoritative. Safety fields — temperature maxima against caps,
+  dangerous commands, heater-off and `M84` in the footer — remain gating. A
+  numbers-only mismatch is not by itself a blocker; the G-code is never
+  hand-edited.
+- Always show the user the summary (engine, artifact ids, time, filament,
+  layers, Z range, maxima, bounds, command scan, end sequence, discrepancies,
+  PASS/FAIL and the next gated action) and get explicit confirmation before
   transfer. This is the last cheap abort.
 
 ### Branch — ready-made G-code
@@ -136,16 +162,22 @@ invent a "re-slice" fix when no mesh exists.
 
 ### Stage 6 — Transfer
 
-- `orca_artifact_export` writes under **export roots** and is approval-gated.
-  First call returns a pending `apr_…`; the user decides; retry the identical
-  call. `cura_artifact_export` is prepare → `cura_confirm_action`. Both name
-  the exact destination in the prompt.
-- Default Orca export roots are empty: exports are disabled until configured.
-  If no shared root exists, the user must copy the file — say so plainly
-  rather than improvising network calls.
-- The hand-off check is non-optional: `moonraker_files_list` then
-  `moonraker_file_metadata`. The filename in the gcodes root is what
-  `moonraker_print_start` expects (relative path).
+Pick one path explicitly with the user and log which one you chose.
+
+| Path | When | Gate | Verification |
+| --- | --- | --- | --- |
+| `*_artifact_export` | an export root is configured and reachable by the printer | approval as required (Orca `apr_…` then retry; Cura prepare → `cura_confirm_action`) | file exists at the exact destination |
+| User manual copy | always possible | the user does it themselves (web UI, SCP, share) | `moonraker_files_list` + `moonraker_file_metadata` |
+| Direct host copy by the agent | same host, user explicitly requests it, destination inside the `gcodes` root | explicit user confirmation in that turn; log as outside gated export | SHA-256 on source and destination + `moonraker_files_list` + `moonraker_file_metadata` |
+| Moonraker HTTP upload | user explicitly requests it and the endpoint is available | explicit user confirmation; log as a one-off | `moonraker_files_list` + `moonraker_file_metadata` |
+
+Orca's first gated export call returns a pending `apr_…`; after the human
+decides, retry the identical call. Cura's prepare returns an id/phrase for
+`cura_confirm_action`. Default Orca export roots are empty: exports are
+disabled until configured. Never widen export roots to make an export
+possible, and never claim an export succeeded without the file-list/metadata
+check. The filename in the gcodes root is what `moonraker_print_start` expects
+(relative path).
 
 ### Stage 7 — Print & babysit
 
@@ -169,4 +201,7 @@ invent a "re-slice" fix when no mesh exists.
 
 Offer to remove the per-job workspace after completion, cancel or abort;
 delete it only after explicit confirmation. The same rule applies to slicer
-artifacts (`*_artifact_delete` is high risk).
+artifacts (`*_artifact_delete` is high risk). Remove temporary transfer files
+and any localhost helper server immediately after use. Carry `art_*`, `job_*`
+and `apr_*` ids plus exact filenames into each stage report and the final
+summary so the run is auditable.

@@ -18,6 +18,38 @@ Use `mcp-orca doctor` / `mcp-cura doctor` (CLI) or `orca_doctor` plus
 `orca_engine_info` (MCP) before importing. Say the chosen engine in one line;
 silent fallback is confusing when the user expects Orca output.
 
+## When the user names a Cura profile but Cura is unavailable
+
+A profile name in the user's words is a preference, not permission to switch
+engines. If they ask for a "Cura profile", a Cura quality, or "Cura" while no
+mcp-cura tools are present:
+
+1. Say plainly that mcp-cura is unavailable in this session. Do not silently
+   substitute, and do not present the output as Cura output.
+2. Search the active slicer's presets for the same or closest name.
+   `orca_profile_list` accepts `kind` and `query`; `orca_profile_get(profile_id)`
+   accepts an id, path or name and returns the indexed entry with its path.
+   If the roles are reversed — only Cura is available and the user named an
+   Orca preset — use `cura_profile_list(kind, query, limit)` and
+   `cura_profile_get(profile_id, include_settings, settings_limit)` instead,
+   with the same confirmation rule.
+3. Show candidates with exact ids/paths and say which fields matched. Do not
+   fuzzy-map a name to a preset the user never named.
+4. Ask for explicit confirmation before resolving or slicing with an Orca
+   preset the user called a "Cura profile". If they insist on Cura, stop and
+   help with mcp-cura availability — do not reinterpret the request.
+
+Dialogue template:
+
+> **User:** Slice this with the Serenity Cura profile.
+> **Agent:** mcp-cura has no tools in this session, so I can't run a Cura
+> profile. In the active slicer I found `<exact preset id>` at `<exact path>`
+> (matched name: `<name>`). Is that the profile you meant? I won't substitute
+> it without your yes.
+> **User:** Yes, use that one.
+> **Agent:** Resolving it explicitly with `orca_profile_resolve` and showing
+> the result before I slice.
+
 ## Capability matrix
 
 | Capability | mcp-orca | mcp-cura |
@@ -103,4 +135,6 @@ Do not translate one protocol into the other. Use the server's own tools.
 
 If the user explicitly wants Orca, stop and help them configure
 `engine.preset = "orca"` and a reachable `orca-slicer` binary rather than
-silently switching.
+silently switching. The same rule applies in reverse: if they explicitly want
+Cura and Cura is unavailable, stop and help with Cura availability rather than
+reinterpreting the request as an Orca job.

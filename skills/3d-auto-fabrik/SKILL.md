@@ -22,7 +22,7 @@ compatibility: >-
   and slicing work without printer access.
 metadata:
   author: skill-3d-auto-fabrik contributors
-  version: "0.2.4"
+  version: "0.2.5"
 ---
 
 # 3d-auto-fabrik
@@ -89,8 +89,13 @@ mix servers mid-job.
    say so and offer Cura. Switching engines means re-importing the model into
    the other server and restarting at Stage 1 — never pass one server's
    `artifact_id` to the other.
+5. If the user names a **Cura profile or the Cura engine** but no mcp-cura
+   tools are available, do not silently substitute. Say Cura is unavailable,
+   search the active slicer's presets for the same or closest name, and show
+   exact ids/paths. Require explicit confirmation before treating a
+   Cura-named profile as an Orca preset — a name match is not consent.
 
-Details, capability matrix and fallback dialogue:
+Details, capability matrix, the Cura-name dialogue and fallback rules:
 [references/engine-selection.md](references/engine-selection.md).
 
 ## Job workspace and input discovery
@@ -143,6 +148,11 @@ If any row is red: report the tool's own words, stop all mutations, and let
 read-only work (mesh inspect, profile review) continue. Never install a
 package, edit a config or retry with altered arguments to make a row green.
 
+A missing entry in `*_profile_list` is not proof a preset is unusable: the
+list is a bounded index. Resolve an exact path before concluding a preset is
+absent — see
+[references/printer-materials.md](references/printer-materials.md).
+
 ## Printer, material and profile configuration
 
 Load [references/printer-materials.md](references/printer-materials.md) when
@@ -169,9 +179,22 @@ choosing a printer or material. Principles, not a hard-coded catalog:
 Work stage by stage. Report briefly after each stage and pause for the user
 whenever a gate requires it.
 
-**Stage 0 — Plan.** Summarize the job in one paragraph (workspace path, file,
-engine, printer, material, nozzle, preset, copies, placement, queue or direct
-print). Get the go-ahead.
+**Stage 0 — Plan.** Summarize the job in one paragraph and get the go-ahead.
+Use this template so every confirmation covers the same facts:
+
+```text
+Plan confirmation — <job id or workspace path>
+Files / models:      <exact files; artifact ids recorded after import>
+Engine:              <mcp-orca | mcp-cura> — why this one
+Printer identity:    <from moonraker_server_info + user label>
+Material mapping:    <user label → exact preset id/path>
+Profiles:            <printer / filament / process or Cura equivalents>
+Copies / placement:  <count and position on the bed>
+Transfer mode:       <export | user copy | approved same-host copy | HTTP upload>
+Print mode:          <direct print | job queue>
+```
+
+Do not start the first mutating stage until the user confirms this plan.
 
 **Stage 1 — Import.**
 
@@ -190,6 +213,14 @@ If a path import is refused, re-import the same bytes via `data`
 (content-addressing returns the same artifact id) instead of stripping the
 job down to "I can't help". Record the returned `artifact_id` — every later
 step references it.
+
+Then call `orca_artifact_get` / `cura_artifact_get` and assert `kind` and
+`format` match the request **before Stage 2**. If the artifact is
+`kind: "other"` or otherwise unexpected, report the metadata verbatim and do
+not run mesh tools on it. Re-import the original bytes with explicit
+`kind`/`format`; if content-addressing returns the same id, treat it as an
+upstream classification issue and stop/ask. A harmless header change is a
+last-resort diagnostic only — never present it as a geometry repair.
 
 **Stage 2 — Inspect & repair.** Always `orca_mesh_inspect` /
 `cura_mesh_inspect` first (bounds in mm, triangle count, watertightness,
@@ -254,9 +285,33 @@ guess at a cause.
 - Cura: `cura_gcode_inspect` + `cura_gcode_verify`. If shutdown or steppers
   are missing, `cura_gcode_prepare` creates a _new_ artifact; carry the new
   id forward. Dangerous commands mean re-slice, never a hand edit.
+- **Cross-check the numbers.** Compare `orca_gcode_inspect` /
+  `cura_gcode_inspect` with the G-code's own header/config summary (`total
+  layer number`, `total layers count`, `filament used [mm]`, temperatures) and,
+  after transfer, with `moonraker_file_metadata`. Report discrepancies
+  explicitly; do not treat one source as authoritative for informational
+  values. Safety fields — max temperatures against caps, `M112` / `M500` /
+  `M502` / mid-file `G28`, heater-off and stepper-disable in the footer —
+  remain gating. A numbers-only mismatch is reported, not silently ignored
+  and not a blocker by itself.
 
-Then **show the user the summary** — engine, time, filament, hottest
-temperature, review result — and get explicit confirmation before Stage 6.
+Then **show the user the summary** and get explicit confirmation before Stage 6:
+
+```text
+Stage 5 review — <gcode artifact id>
+Engine / slice job:   <engine, job_* id>
+Time / filament:      <estimate; mm and g>
+Layers / Z range:     <inspect value vs header summary value>
+Max nozzle / bed:     <°C; vs policy caps and material limits>
+Move bounds:          <where reported, vs build volume; else "not reported">
+Dangerous commands:   <none | list of commands found>
+End sequence:         <heaters off, park/lift, M84 — PASS/FAIL>
+Discrepancies:        <inspect vs summary vs Moonraker metadata, or "none">
+Verdict:              <PASS / FAIL with tool evidence>
+Next gated action:    <transfer method and approval to expect>
+```
+
+Do not proceed while the verdict is FAIL.
 
 **Branch — the user supplied ready-made G-code.** Skip Stages 2–4 and do not
 pretend the file was sliced. Import it as `kind: "gcode"`, then run the Stage 5
@@ -272,13 +327,22 @@ separate turn. A failed check is reported verbatim; with no mesh there is no
 
 **Stage 6 — Transfer to the printer.** The G-code artifact must exist in the
 printer's `gcodes` root. No server exposes an upload tool; the supported paths
-are:
+(detail in [references/pipeline.md](references/pipeline.md)) are:
 
 - `orca_artifact_export` or `cura_artifact_export` to an export root the
   printer can read (a mounted share/USB the printer watches), or
 - the user copies the file there themselves (web UI, SCP, the share), or
 - if — and only if — the user explicitly asks, the Moonraker HTTP upload
-  endpoint as a clearly logged one-off.
+  endpoint as a clearly logged one-off, or
+- a **direct same-host copy by the agent** — only when the printer shares the
+  client's host, the user explicitly requests it in that turn, and the
+  destination is inside the printer's `gcodes` root. This is a logged
+  exception to the gated export path, not a replacement for it: state that,
+  record the exact destination, verify SHA-256 on source and destination, then
+  confirm with `moonraker_files_list` + `moonraker_file_metadata`.
+
+Never widen export roots to make an export possible, and never claim a
+transfer succeeded without the file-list/metadata check.
 
 Orca export is approval-gated: the first call returns a pending approval id;
 the user decides via `orca_approval_decide` (in-band/both) or
@@ -304,6 +368,20 @@ readiness checks.
   paused queue stays paused — `moonraker_job_queue_start` only after explicit
   confirmation. Show the queue again so the user sees what is waiting.
 
+Use this print-start template for a direct print or when a queued job loads:
+
+```text
+Print start
+File on gcodes root:   <exact filename from moonraker_files_list>
+Metadata match:        <time/filament vs slicer output>
+Printer state:         <ready and idle; not shut down or busy>
+Temperatures:          <sane ambient readings>
+Physical checks:       <bed clear, correct plate, material, door — user confirms>
+Approval:              <apr_* id, phrase and TTL from the prepare response>
+Await:                 the phrase in chat or out-of-band approval, then
+                       moonraker_confirm_action(id, phrase, acknowledge=true)
+```
+
 During the print (or when a queued job loads): poll `moonraker_printer_status` and
 `moonraker_temperatures`; use `moonraker_camera_snapshot` for a visual check
 when something seems off; `moonraker_gcode_history` when commands fail. To
@@ -318,6 +396,11 @@ the user wants artifacts cleaned up, list them (`orca_artifact_list` /
 `cura_artifact_list`) and only delete with explicit confirmation —
 `*_artifact_delete` is high risk. Offer the same for the per-job workspace;
 delete it only after explicit confirmation, and offer it on cancel/abort too.
+
+Keep an audit trail: include the ids you touched (`art_*`, `job_*`, `apr_*`)
+and exact filenames in each stage report and in the final summary. Remove any
+temporary transfer files or localhost helper server immediately after use;
+keep the job workspace until the user confirms deletion.
 
 ## Approvals in one breath
 

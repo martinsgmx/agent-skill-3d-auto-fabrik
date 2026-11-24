@@ -79,6 +79,31 @@ printer's build volume, nozzle or temperatures from a directory name.
    ask the user to confirm, and write **only** the user config file. There is
    no automatic background setup.
 
+## When `*_profile_list` misses a user preset
+
+`orca_profile_list` / `cura_profile_list` is a **bounded index**, not proof of
+absence. It reports what the server indexed from its configured sources
+(explicit paths plus OS-detected defaults, if enabled) and workspace custom
+profiles — not a whole-system scan. A user preset on disk may be missing from
+the list. Before concluding a preset is unavailable, work through this order:
+
+1. Query the index with its `kind` and `query` filters (`orca_profile_list`,
+   `cura_profile_list`); the default list may be truncated.
+2. Use an **exact configured path** from the user config, or load one by id,
+   path or name with `orca_profile_get(profile_id)` /
+   `cura_profile_get(profile_id, include_settings, settings_limit)`.
+3. Ask the user for a directory or file and read it read-only; show what was
+   found before using it.
+4. Resolve or verify with that explicit path:
+   `orca_profile_resolve(printer, filament, process)` or
+   `cura_profile_resolve` / `cura_profile_verify`. Check `resolution[]`
+   sources (for example `explicit_path`) and every warning before claiming
+   the preset resolved.
+
+Never edit `search_paths`, `[profiles] dirs`, `auto_discover` or any slicer
+config to make a preset appear. Report the discovery scope: which sources the
+list covered, and that the preset was resolved by explicit path.
+
 ## Printer identity
 
 Identify a printer by what Moonraker reports — `moonraker_server_info` gives
