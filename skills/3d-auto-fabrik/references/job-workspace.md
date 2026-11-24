@@ -93,3 +93,29 @@ triangle **soup**, not a boolean union, and must never be applied silently.
   same artifact id).
 - Record each returned `artifact_id`. Artifact ids belong to one server only —
   never pass an Orca id to Cura or the reverse.
+
+## Importing large artifacts from a Code Mode runtime
+
+The `data` channel is still the sanctioned path. A Code Mode `execute` runtime
+may expose no filesystem import (`node:fs` unavailable) and may block
+`fetch('file://…')`, so a multi-megabyte STL cannot be read straight into the
+call. Keep the workaround boring and scoped:
+
+1. Check for a runtime-provided file/artifact helper first and use it if one
+   exists. Do not assume the workaround is needed.
+2. If none exists, stage the base64 under the client's approved scratch area
+   (for OpenCode, `/tmp/opencode`), serve it from a localhost-only HTTP server
+   bound to `127.0.0.1`, fetch it over `http://127.0.0.1:<port>/…` in
+   `execute`, and import through `data` with explicit `name`, `kind`, `format`.
+3. Kill the server and delete the staged file in the same turn, including on
+   failure. Never leave a listener or scratch bytes behind.
+4. Do not widen `import_roots`, do not stage on a public/external URL, and do
+   not alter geometry to force an import. If the import returns an unexpected
+   kind, follow the artifact-metadata check in SKILL.md Stage 1 instead of
+   retrying blindly.
+
+## Cleanup checklist
+
+- [ ] Temporary transfer files and localhost helper servers: removed immediately after use.
+- [ ] Per-job workspace: kept until the user confirms deletion; offered again on cancel or abort.
+- [ ] Final summary: exact created G-code filename(s), destination path and the `art_*` / `job_*` / `apr_*` ids touched.

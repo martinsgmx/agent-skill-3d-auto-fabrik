@@ -80,6 +80,17 @@ There is no `orca_confirm_action`. Do not invent one, and do not treat
 5. `disable_emergency_stop` exists in Moonraker's policy but disabling the
    emergency path is never appropriate on a real printer.
 
+## Confirmations that are not approvals
+
+Three checkpoints use the human's word, not a server approval: the Plan
+confirmation (Stage 0), the Stage 5 review verdict, and the Print-start
+confirmation (Stage 7). They are deliberate pauses you cannot satisfy with
+`orca_approval_decide` or `*_confirm_action`. Keep them distinct in reports:
+say "I need your decision on <x>" for a checkpoint, and show a server id or
+phrase only for a real approval. The explicitly requested same-host G-code
+copy in Stage 6 follows the same rule — the user confirms in that turn and no
+approval id is invented for it.
+
 ## Refusals and what to do with them
 
 When a tool refuses (temperature cap, read-only, export outside roots, missing
