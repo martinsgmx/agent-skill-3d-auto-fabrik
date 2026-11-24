@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-24
+
 ### Added
 - URL/ZIP input path: download over http(s) into a unique per-job workspace,
   extract with zip-slip/symlink and size/file caps, and keep the workspace

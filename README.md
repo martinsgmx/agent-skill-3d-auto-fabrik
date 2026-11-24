@@ -260,10 +260,10 @@ see [SECURITY.md](SECURITY.md) and do not open a public issue.
 
 ## Status
 
-`0.2.5` (skill metadata) — pre-1.0. The `0.2.5` changes are still under
-`[Unreleased]` in [CHANGELOG.md](CHANGELOG.md); the last dated entry is `0.2.0`
-(2026-11-19). The skill, tool catalogs and docs may change between releases;
-pin a commit if you need stability.
+`0.2.5` — released 2026-11-24, tagged `v0.2.5`. See
+[CHANGELOG.md](CHANGELOG.md) for release history. This is pre-1.0: the skill,
+tool catalogs and docs may change between releases; pin a commit or tag if you
+need stability.
 
 ## Development
 
