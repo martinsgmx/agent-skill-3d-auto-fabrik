@@ -104,7 +104,8 @@ print → monitor — and the rules that make each gate meaningful.
 | profile | `orca_profile_resolve` | `cura_profile_resolve` / `verify` | selections + warnings; Cura needs zero errors |
 | slice | `orca_slice` + `status/wait` | `cura_slice` + `status/wait` | G-code `artifact_id` + job record |
 | review | `orca_gcode_inspect` + `read_text` | `cura_gcode_inspect` / `verify` / `prepare` | go/no-go + possibly a new artifact |
-| transfer | `orca_artifact_export` or user copy → gcodes root | `cura_artifact_export` or user copy | `moonraker_file_metadata` match |
+| transfer | G-code bytes → `moonraker_file_upload` | same | `moonraker_file_verify` (`verified: true`) + `moonraker_file_metadata` match |
+| preflight | `moonraker_print_preflight` | same | `ready_to_prepare_start`, blocking reasons |
 | print | `moonraker_print_start` (double-confirmed) | same | print job; monitor status/temps/camera |
 
 ## Approval state
@@ -130,11 +131,12 @@ time.
 - **Progressive disclosure** — SKILL.md is the short version; deep detail
   lives in `references/` and loads only when needed.
 - **No magic** — every step names the exact tool; the agent never has to
-  guess what "check the profile" means.
+  guess what "check the profile" means. Tools and arguments come from the
+  generated catalogs, never from memory.
 - **One engine per job** — fallback is a decision, not a drift.
 - **The human is the gate** — the skill never authorizes itself past a
   destructive action, even when the human said "go ahead" three messages
   ago.
-- **Honest hand-offs** — where the servers cannot do something (no upload
-  tool, no Orca G-code verify), the skill says so and names the legitimate
-  alternatives instead of improvising.
+- **Honest hand-offs** — where a server cannot do something (no Orca G-code
+  verify, no upload tool exposed in the session), the skill says so and stops
+  instead of improvising a tool, path or result.

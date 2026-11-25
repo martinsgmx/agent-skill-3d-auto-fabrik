@@ -51,7 +51,7 @@ slice_command = [
 
 | Symptom | Check | Fix |
 | --- | --- | --- |
-| `orca_artifact_export` refused; the file never lands in the printer's `gcodes` root | `orca_policy_info` — `export_roots` empty | Transfer via a user-side path (the user copies the file into the printer's gcodes root, or a mounted share/USB), or an explicit one-off Moonraker HTTP upload on the user's ask. After transfer, confirm with `moonraker_files_list` (root `gcodes`) and `moonraker_file_metadata` — estimated time and filament should match the slicer output. |
+| `orca_artifact_export` refused; the file never lands in the printer's `gcodes` root | `orca_policy_info` — `export_roots` empty | Do not widen roots. Upload the G-code with `moonraker_file_upload` instead (`filename`, `data_base64`, `root="gcodes"`), encoding the exact artifact bytes with a real base64 tool. Verify with `moonraker_file_verify` (`verified: true`) and `moonraker_files_list` + `moonraker_file_metadata`; estimated time and filament should match the slicer output. |
 
 ## 6. Print flow
 
@@ -67,6 +67,7 @@ slice_command = [
 - Tool refuses → relay the refusal and its reason. Don't rephrase, enable the flag, or find another tool.
 - Destructive action (`orca_artifact_delete`, job-workspace cleanup) → only with explicit user confirmation.
 - After upgrading a binary, refresh the tool reference tables in `references/` (`scripts/generate-tool-reference.py`).
+- Use only cataloged tool names and arguments; if a tool is unavailable, say so. Never invent a tool, id, confirmation phrase, path or result — see `tool-discipline.md`.
 
 ## 8. Getting help
 

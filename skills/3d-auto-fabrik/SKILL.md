@@ -1,13 +1,15 @@
 ---
 name: 3d-auto-fabrik
 description: >-
-  Orchestrates mcp-orca (preferred) or mcp-cura for slicing, and
-  mcp-moonraker for supervised Klipper/Moonraker printing: URL/ZIP model
-  bundles and model-file discovery, a unique per-job workspace, printer and
-  material configuration seeded from live MCP settings, mesh import and
-  inspection, profile resolution, slicing, ready-made G-code validation and
-  review, transfer, job queue, print start, live monitoring and
-  pause/resume/cancel — always behind the servers' policy and approval gates.
+  Orchestrates mcp-orca (preferred) or mcp-cura — the only slicing tools this
+  skill uses — and mcp-moonraker for supervised Klipper/Moonraker printing:
+  URL/ZIP model bundles and model-file discovery, a unique per-job workspace,
+  printer and material configuration seeded from live MCP settings, mesh
+  import and inspection, profile resolution, slicing, ready-made G-code
+  validation and review, Moonraker G-code upload into the printer's gcodes
+  root, file verification, print preflight, job queue, print start, live
+  monitoring and pause/resume/cancel — always behind the servers' policy and
+  approval gates.
   Use this skill whenever the user mentions slicing, 3D printing,
   STL/3MF/OBJ/AMF files, model download URLs or ZIPs, OrcaSlicer, CuraEngine,
   Klipper or Moonraker — even if they never name these MCP servers — and
@@ -36,8 +38,9 @@ One pipeline, two interchangeable slicer adapters, one printer server:
 - **mcp-moonraker** — Klipper state, temperatures, files, print control.
 
 The slicers never contact the printer; mcp-moonraker never slices. This skill
-is the glue. Files move between them only through an explicit, approval-gated
-handoff.
+is the glue. The hand-off is `moonraker_file_upload` into the printer's
+`gcodes` root, followed by verification — never a silent copy or a made-up
+transfer. Approval gates stay where the servers put them.
 
 ## Non-negotiable rules — read before touching hardware
 
@@ -52,7 +55,8 @@ nozzle. The friction is the point.
    approval ids or confirmation phrases.
 2. **Never skip verification to be helpful.** Review the G-code before any
    print, `moonraker_verify_connection` before any printer action, and
-   `moonraker_files_list` + `moonraker_file_metadata` after any transfer.
+   `moonraker_file_verify` + `moonraker_files_list` +
+   `moonraker_file_metadata` after any transfer.
 3. **`moonraker_emergency_stop` is the only un-gated lever.** Use it only when
    something is physically going wrong _right now_ (smoke, grinding, nozzle
    dragging through the part, axes colliding). For "stop heating" outside an
@@ -65,6 +69,21 @@ nozzle. The friction is the point.
 5. **When in doubt, stop and ask.** A paused printer wastes a little
    electricity; a wrong print wastes hours and filament; a bypassed gate can
    burn a house down. The user is always reachable — ask.
+6. **Slice only with mcp-orca or mcp-cura.** A slice exists only when
+   `orca_slice` or `cura_slice` returns a `job_*` id. Never hand-write G-code,
+   never treat a text edit as a slice, and never invent a time or filament
+   estimate when no slice completed.
+7. **Send G-code to the printer only through Moonraker.** The agent-side path
+   is `moonraker_file_upload` into the `gcodes` root, then
+   `moonraker_file_verify` and `moonraker_print_preflight`. A raw HTTP call, a
+   silent copy into the gcodes root, or a claimed transfer without a verified
+   file is not an acceptable substitute.
+8. **Use only tools that actually exist.** Call only tool names and arguments
+   listed in the generated catalogs below, and only tools exposed in this
+   session. Never invent a tool, an argument, an id, a path, a URL, a policy
+   value or a tool result. Quote tool output; if a tool is missing or fails,
+   say so and stop instead of substituting a plausible-looking action. See
+   [references/tool-discipline.md](references/tool-discipline.md).
 
 ## Choose the slicer, once per job
 
@@ -190,7 +209,7 @@ Printer identity:    <from moonraker_server_info + user label>
 Material mapping:    <user label → exact preset id/path>
 Profiles:            <printer / filament / process or Cura equivalents>
 Copies / placement:  <count and position on the bed>
-Transfer mode:       <export | user copy | approved same-host copy | HTTP upload>
+Transfer mode:       <moonraker_file_upload to gcodes | explicit user override>
 Print mode:          <direct print | job queue>
 ```
 
@@ -245,8 +264,10 @@ Cura and restart at Stage 1.
   `overrides`. Check `resolution[]` sources and read every warning. A
   `settings_complete: false` for native presets is normal: Orca resolves
   those files by reference at slice time. There is no `orca_profile_verify`;
-  the final G-code is the verification surface (Stage 5). Repeatable
-  overrides belong in a workspace profile: `orca_profile_create` with
+  the final G-code is the verification surface (Stage 5). If a role is
+  omitted, `orca_slice` uses defaults saved earlier through
+  `orca_config_setup` — confirm them in the plan, never assume them.
+  Repeatable overrides belong in a workspace profile: `orca_profile_create` with
   `base_profile` + `settings`.
 - Cura: `cura_profile_list` → `cura_profile_resolve` (definition + quality +
   material + variant + intent) → `cura_profile_verify`. Errors must be zero
@@ -265,7 +286,9 @@ variant, intent, overrides?, name, wait=true, wait_timeout_secs)`. Same job
   rules; poll `cura_slice_status` / `cura_slice_wait` / `cura_slice_cancel`.
 
 If a slice fails, quote the actual engine error from the job status — never
-guess at a cause.
+guess at a cause. Record the `job_*` id and terminal status: without them
+there is no slice and no time/filament estimate to report. Writing G-code by
+hand, or presenting an edited file as sliced output, is not a slice.
 
 **Stage 5 — G-code review.** This is the last cheap chance to abort.
 
@@ -288,8 +311,9 @@ guess at a cause.
 - **Cross-check the numbers.** Compare `orca_gcode_inspect` /
   `cura_gcode_inspect` with the G-code's own header/config summary (`total
   layer number`, `total layers count`, `filament used [mm]`, temperatures) and,
-  after transfer, with `moonraker_file_metadata`. Report discrepancies
-  explicitly; do not treat one source as authoritative for informational
+  after transfer, with `moonraker_file_verify` and
+  `moonraker_file_metadata`. Report discrepancies explicitly; do not treat one
+  source as authoritative for informational
   values. Safety fields — max temperatures against caps, `M112` / `M500` /
   `M502` / mid-file `G28`, heater-off and stepper-disable in the footer —
   remain gating. A numbers-only mismatch is reported, not silently ignored
@@ -325,39 +349,43 @@ Then **stop** — no queue, no transfer, no print unless the user asks in a
 separate turn. A failed check is reported verbatim; with no mesh there is no
 "just re-slice" fix, and the G-code is never hand-edited.
 
-**Stage 6 — Transfer to the printer.** The G-code artifact must exist in the
-printer's `gcodes` root. No server exposes an upload tool; the supported paths
-(detail in [references/pipeline.md](references/pipeline.md)) are:
+**Stage 6 — Upload the G-code with Moonraker.** The sliced G-code must land in
+the printer's `gcodes` root. The agent-side transfer is
+`moonraker_file_upload`; no slicer contacts the printer. Do not substitute a
+raw HTTP endpoint, an export-root hand-off or a direct filesystem copy unless
+the upload tool is unavailable and the user explicitly chooses that fallback
+after you say so. Detail: [references/pipeline.md](references/pipeline.md).
 
-- `orca_artifact_export` or `cura_artifact_export` to an export root the
-  printer can read (a mounted share/USB the printer watches), or
-- the user copies the file there themselves (web UI, SCP, the share), or
-- if — and only if — the user explicitly asks, the Moonraker HTTP upload
-  endpoint as a clearly logged one-off, or
-- a **direct same-host copy by the agent** — only when the printer shares the
-  client's host, the user explicitly requests it in that turn, and the
-  destination is inside the printer's `gcodes` root. This is a logged
-  exception to the gated export path, not a replacement for it: state that,
-  record the exact destination, verify SHA-256 on source and destination, then
-  confirm with `moonraker_files_list` + `moonraker_file_metadata`.
-
-Never widen export roots to make an export possible, and never claim a
-transfer succeeded without the file-list/metadata check.
-
-Orca export is approval-gated: the first call returns a pending approval id;
-the user decides via `orca_approval_decide` (in-band/both) or
-`mcp-orca approvals approve <id>` (out-of-band), then you retry the
-**identical** call. Cura export is prepare → `cura_confirm_action`.
-
-Before touching the printer, confirm the file arrived:
-`moonraker_files_list` (root `gcodes`) and `moonraker_file_metadata` —
-estimated time and filament should match the slicer output.
+1. `moonraker_policy_info` must allow mutations. If an upload is refused,
+   relay the refusal and stop — do not work around the policy.
+2. Read the artifact's `sha256` and `bytes` with `orca_artifact_get` /
+   `cura_artifact_get`; these are the expected values for verification. Get
+   the exact bytes from a real copy: `cura_artifact_get` reports `blob_path`;
+   Orca artifacts can be exported with `orca_artifact_export` to a configured
+   export root (approval-gated). If no export root is configured, ask the
+   user to configure one; never edit the server config yourself. If only text
+   is available, use `*_artifact_read_text` and require `truncated: false`.
+   Encode the bytes with your platform's base64 encoder (`base64 -w0` or
+   equivalent). If none is available, ask the user. Never type or reconstruct
+   base64 by hand, and never guess a blob path.
+3. Pick an unused filename (`moonraker_files_list`, root `gcodes`) and call
+   `moonraker_file_upload` with `filename`, `data_base64` and
+   `root="gcodes"`; keep `overwrite=false`. Overwrite is destructive and
+   needs a human decision via `moonraker_confirm_action`.
+4. Verify with `moonraker_file_verify(filename, expected_sha256,
+   expected_size)`; require `verified: true`. Then confirm with
+   `moonraker_files_list` (root `gcodes`) and `moonraker_file_metadata` —
+   estimated time and filament should match the slicer output. Report a
+   numbers-only mismatch; never claim a transfer without these checks.
 
 **Stage 7 — Queue or print.** Choose with the user; both paths need the same
 readiness checks.
 
-- Direct print: `moonraker_printer_status` shows Klipper ready and idle, not
-  shut down or busy; `moonraker_temperatures` shows sane ambient readings.
+- Direct print: `moonraker_print_preflight` first — a read-only check of
+  Klippy state, active job, queue, temperatures, file existence/metadata and
+  policy caps; it returns `ready_to_prepare_start` and blocking reasons.
+  Then `moonraker_printer_status` shows Klipper ready and idle, not shut down
+  or busy; `moonraker_temperatures` shows sane ambient readings.
   Bed is clear, correct plate, correct material loaded, door closed — ask the
   user; you cannot see it. The user confirms the exact filename.
   `moonraker_print_start` prepares a high-risk action; relay the approval
@@ -373,6 +401,8 @@ Use this print-start template for a direct print or when a queued job loads:
 ```text
 Print start
 File on gcodes root:   <exact filename from moonraker_files_list>
+Verified:              <moonraker_file_verify verified, sha256/size match>
+Preflight:             <ready_to_prepare_start and any blocking reasons>
 Metadata match:        <time/filament vs slicer output>
 Printer state:         <ready and idle; not shut down or busy>
 Temperatures:          <sane ambient readings>
@@ -429,6 +459,7 @@ runs. Full protocol: [references/safety-approvals.md](references/safety-approval
 - [references/mcp-cura-tools.md](references/mcp-cura-tools.md) — all mcp-cura tools likewise
 - [references/mcp-moonraker-tools.md](references/mcp-moonraker-tools.md) — all mcp-moonraker tools likewise
 - [references/safety-approvals.md](references/safety-approvals.md) — approval modes, refusal rules, emergency handling
+- [references/tool-discipline.md](references/tool-discipline.md) — use only cataloged tools; no invented ids, paths or results
 - [references/troubleshooting.md](references/troubleshooting.md) — doctor output, common failures, fixes
 - [scripts/check-setup.sh](scripts/check-setup.sh) — verify the servers are installed and reachable
 

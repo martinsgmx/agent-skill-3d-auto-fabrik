@@ -6,6 +6,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `references/tool-discipline.md`: use only tools and arguments from the
+  generated catalogs, copy ids/phrases/paths from tool results, and require
+  evidence for every stage claim.
+- Stage 6 now uses `moonraker_file_upload` into the `gcodes` root, followed by
+  `moonraker_file_verify` and `moonraker_file_metadata`.
+- `moonraker_print_preflight` in Stage 7 before preparing a print start.
+- Hard rule that slicing happens only through `orca_slice` / `cura_slice`,
+  with a recorded `job_*` id, and that G-code is never hand-written.
+- Evals 9 and 10: mandatory slicer/Moonraker path and refusal to invent tools.
+
+### Changed
+- Regenerated `mcp-orca-tools.md`, `mcp-cura-tools.md` and
+  `mcp-moonraker-tools.md` from the installed binaries; the Moonraker catalog
+  now includes `moonraker_file_upload`, `moonraker_file_verify`,
+  `moonraker_print_preflight` and `moonraker_approval_detail`, and the Orca
+  catalog includes the `orca_config_*` tools.
+- Removed the stale "no upload tool" guidance and the raw HTTP upload fallback
+  from SKILL.md, `references/pipeline.md`, the troubleshooting references,
+  `docs/faq.md` and `docs/architecture.md`.
+
 ## [0.2.5] - 2026-11-24
 
 ### Added

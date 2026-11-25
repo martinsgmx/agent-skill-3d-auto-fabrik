@@ -178,8 +178,8 @@ connected, not a problem in this stack. For configuration details, see
    > then print it after I confirm the G-code."
 
    The agent should choose an engine, import → inspect → resolve → slice →
-   review G-code → show you the estimate → wait for your go → transfer →
-   confirm → start the print. If it tries to skip a gate, point it at
+   review G-code → show you the estimate → wait for your go → Moonraker upload
+   → verify → confirm → start the print. If it tries to skip a gate, point it at
    [skills/3d-auto-fabrik/references/safety-approvals.md](skills/3d-auto-fabrik/references/safety-approvals.md).
 
 ## Usage examples
@@ -198,7 +198,8 @@ confirmation before printing.
 ```
 
 Runs the normal pipeline: workspace/import → inspect → profile resolve → slice
-→ G-code review → explicit checkpoint → transfer → approval-gated print.
+→ G-code review → explicit checkpoint → Moonraker upload + verify →
+approval-gated print.
 
 ```text
 Check this G-code against my printer and PETG limits, but do not print it:

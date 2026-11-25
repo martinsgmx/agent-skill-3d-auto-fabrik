@@ -37,12 +37,14 @@ in this stack will bless an unattended print *on your behalf* — you can of
 course write your own wrapper, but that is outside this skill's guarantee and
 you should not.
 
-**Why doesn't it upload the G-code to the printer itself?**
-Neither slicer ships an upload tool on purpose: the hand-off is an
-approval-gated export or a human copy. If you want a one-click experience,
-map the gcodes root onto a directory under the slicer's export roots (e.g.
-a CIFS/NFS mount on the printer) — then Stage 6 is `*_artifact_export` with
-the user's approval.
+**Why doesn't the slicer upload the G-code itself?**
+The slicers do not talk to printers by design. The skill uses Moonraker's
+`moonraker_file_upload` for the hand-off: it sends base64 G-code into the
+printer's `gcodes` root, then `moonraker_file_verify` checks the SHA-256 and
+size, and `moonraker_print_preflight` checks readiness. Uploading never
+starts a print. If the upload tool is unavailable or policy refuses it, the
+skill reports that; it does not invent another upload tool or call a raw HTTP
+endpoint behind your back.
 
 **Orca has no `gcode_verify`. Is that safe?**
 The skill compensates: `orca_gcode_inspect` for time/filament/temperature

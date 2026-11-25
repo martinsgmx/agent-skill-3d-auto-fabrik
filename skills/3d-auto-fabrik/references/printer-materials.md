@@ -44,10 +44,12 @@ stop and ask the user.
 | Tool | What it gives you |
 | --- | --- |
 | `orca_server_info` / `cura_server_info` | version, workspace paths, engine and profile-source summary, policy/approval mode |
-| `orca_doctor` / `cura_doctor` | per-check health; read the **engine** entry, not just overall `ok` |
+| `orca_doctor` / `mcp-cura doctor` | per-check health; read the **engine** entry, not just overall `ok` |
 | `orca_engine_info` / `cura_engine_info` | engine `available`, resolved path/version, `slice_command_configured` |
 | `orca_profile_list` / `cura_profile_list` | the presets the server can actually index, with ids |
 | `orca_profile_get` / `cura_profile_get` | details for one indexed id/path/name |
+| `orca_config_scan` / `orca_config_profiles` | read-only discovery of local OrcaSlicer presets and the active selection |
+| `orca_config_defaults` | first-time defaults saved in mcp-orca's workspace; explicit user values, never guesses |
 | `moonraker_config` | effective Moonraker config, secrets redacted; read-only |
 | `moonraker_server_info` | Klipper host/version/state, `config_file`, registered directories |
 | `moonraker_policy_info` | temperature caps, approval mode, mutation switches |
