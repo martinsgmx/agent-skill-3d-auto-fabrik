@@ -15,7 +15,7 @@ domain. If mcp-orca is unavailable, the skill falls back to mcp-cura.
 | "did not resolve to a .json file" | resolve/selection warnings | Pass a preset path, add its directory to `search_paths`, or set `base_profile` on the workspace profile artifact |
 | Import rejected | `orca_policy_info`, `print-config` | `workspace.import_roots` defaults to empty. Import via base64 `data`, or ask the owner to add a root |
 | Imported mesh shows `kind:other` / "not a mesh" | `orca_artifact_get`, then `orca_mesh_inspect` only if the kind is `mesh` | (agent-side) Report metadata verbatim; re-import original bytes with explicit `kind`/`format`. Same content-addressed id means an upstream classification issue — stop/ask. A harmless header change is a last-resort diagnostic, never a geometry fix |
-| Export refused | `orca_policy_info`, `print-config` | `workspace.export_roots` defaults to empty. Add a root, or have the user copy the file |
+| Export refused | `orca_policy_info`, `print-config` | `workspace.export_roots` defaults to empty. Prefer `moonraker_file_upload` with the exact artifact bytes; an export root is only needed if you choose the export route and the user configures it |
 | Slice fails instantly | `orca_slice_status` → `error` | Usually no engine invocation configured, or a preset that is not native `.json`; quote the error |
 | Slice hangs | `orca_slice_status` | `orca_slice_cancel`; check `engine.timeout_secs` and `max_concurrent_jobs` |
 | G-code review feels thin | `orca_gcode_inspect` output | Orca has no verify tool. Read header/footer with `orca_artifact_read_text`; re-slice if the end sequence is wrong |
@@ -73,10 +73,13 @@ domain. If mcp-orca is unavailable, the skill falls back to mcp-cura.
   fetch blocked. Use the scoped, localhost-only staging pattern in
   `job-workspace.md`; kill the helper server and delete staged bytes in the
   same turn, including on failure.
-- **No export root / no upload tool**: use the transfer decision table in
-  `pipeline.md`. A same-host copy is an explicitly requested, logged exception
-  with SHA-256 and Moonraker metadata verification — never a silent widening
-  of export roots.
+- **No export root**: upload with `moonraker_file_upload` instead of exporting
+  from the slicer; see the Stage 6 table in `pipeline.md`. Encode the exact
+  artifact bytes with a real base64 tool, then require `verified: true` from
+  `moonraker_file_verify` plus the Moonraker file-list/metadata check.
+- **Upload tool missing or refused**: report it as unavailable and stop. Do
+  not invent an upload tool, call a raw HTTP endpoint, or copy into the
+  gcodes root without an explicit user choice made after you explain this.
 
 ## Getting help
 

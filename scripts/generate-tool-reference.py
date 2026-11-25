@@ -101,7 +101,10 @@ def main() -> int:
             "mcp-moonraker tool catalog",
             "Read-only tools first (`printer_status`, `temperatures`, `server_info`), "
             "reversible mutations next, double-confirmed destructive tools last. "
-            "`moonraker_emergency_stop` bypasses gates by design.",
+            "G-code hand-off: `moonraker_file_upload` (gcodes root only) → "
+            "`moonraker_file_verify` → `moonraker_print_preflight` → "
+            "`moonraker_print_start`. `moonraker_emergency_stop` bypasses gates "
+            "by design.",
             REFERENCES / "mcp-moonraker-tools.md",
         ),
     ]

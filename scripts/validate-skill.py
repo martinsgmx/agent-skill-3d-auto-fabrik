@@ -8,6 +8,7 @@ Checks (stdlib only):
   * description 1-1024 chars and mentions key trigger terms
   * body under 500 lines (progressive-disclosure budget)
   * every file referenced from SKILL.md exists
+  * tool names in skill docs exist in the generated catalogs
   * LICENSE exists at repo root
 
 Exits non-zero on any failure. Run from the repository root:
@@ -25,6 +26,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILL_DIR = REPO_ROOT / "skills" / "3d-auto-fabrik"
 SKILL_MD = SKILL_DIR / "SKILL.md"
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+TOOL_PREFIXES = ("orca_", "cura_", "moonraker_")
+# These are named in the docs only to say that the servers do not expose them.
+ABSENT_TOOLS = {"orca_profile_verify", "orca_confirm_action"}
 
 failures: list[str] = []
 
@@ -36,6 +40,41 @@ def fail(msg: str) -> None:
 
 def ok(msg: str) -> None:
     print(f"ok    {msg}")
+
+
+def check_tool_names() -> None:
+    """Reject invented tool names in the skill docs.
+
+    The generated tool catalogs are the source of truth. Wildcards such as
+    `*_artifact_get` and the two names documented as absent are skipped.
+    """
+    names: set[str] = set()
+    for path in sorted((SKILL_DIR / "references").glob("mcp-*-tools.md")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            m = re.match(r"^\|\s*`([a-z0-9_]+)`\s*\|", line)
+            if m:
+                names.add(m.group(1))
+    if not names:
+        fail("no tools found in generated catalogs; run scripts/generate-tool-reference.py")
+        return
+
+    bad: list[str] = []
+    docs = [SKILL_MD, *sorted((SKILL_DIR / "references").glob("*.md"))]
+    for path in docs:
+        if path.name.startswith("mcp-"):  # the generated catalogs themselves
+            continue
+        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for ref in re.findall(r"`([^`]+)`", line):
+                token = ref.split("(")[0].strip()
+                if "*" in token or token in ABSENT_TOOLS:
+                    continue
+                if token.startswith(TOOL_PREFIXES) and token not in names:
+                    rel = path.relative_to(REPO_ROOT)
+                    bad.append(f"{rel}:{line_no}: tool not in catalog: {token}")
+    for msg in bad:
+        fail(msg)
+    if not bad:
+        ok("tool names in skill docs match the generated catalogs")
 
 
 def main() -> int:
@@ -95,6 +134,8 @@ def main() -> int:
             fail(f"referenced file missing: {ref}")
         else:
             ok(f"reference exists: {ref}")
+
+    check_tool_names()
 
     if not (REPO_ROOT / "LICENSE").is_file():
         fail("LICENSE missing at repository root")

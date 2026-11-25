@@ -160,27 +160,35 @@ Report PASS/FAIL with the tool evidence and stop. No queue, transfer or print
 until the user asks in a separate turn; never hand-edit the G-code, and never
 invent a "re-slice" fix when no mesh exists.
 
-### Stage 6 — Transfer
+### Stage 6 — Upload to the printer with Moonraker
 
-Pick one path explicitly with the user and log which one you chose.
+`moonraker_file_upload` is the agent-side transfer. It puts base64 G-code into
+the `gcodes` root only and never starts a print. Do not substitute a raw HTTP
+endpoint, an export-root hand-off or a direct filesystem copy unless the user
+explicitly chooses that fallback after you say the upload tool is unavailable.
 
-| Path | When | Gate | Verification |
-| --- | --- | --- | --- |
-| `*_artifact_export` | an export root is configured and reachable by the printer | approval as required (Orca `apr_…` then retry; Cura prepare → `cura_confirm_action`) | file exists at the exact destination |
-| User manual copy | always possible | the user does it themselves (web UI, SCP, share) | `moonraker_files_list` + `moonraker_file_metadata` |
-| Direct host copy by the agent | same host, user explicitly requests it, destination inside the `gcodes` root | explicit user confirmation in that turn; log as outside gated export | SHA-256 on source and destination + `moonraker_files_list` + `moonraker_file_metadata` |
-| Moonraker HTTP upload | user explicitly requests it and the endpoint is available | explicit user confirmation; log as a one-off | `moonraker_files_list` + `moonraker_file_metadata` |
+| Step | Tool | What to check |
+| --- | --- | --- |
+| Policy | `moonraker_policy_info` | mutations allowed; on refusal relay the reason and stop |
+| Expected values | `orca_artifact_get` / `cura_artifact_get` | `sha256` → `expected_sha256`; `bytes` → `expected_size` |
+| Bytes | local copy of the artifact | `cura_artifact_get` reports `blob_path`; Orca uses `orca_artifact_export` to a configured root (approval-gated), or `*_artifact_read_text` with `truncated: false` |
+| Encode | a real base64 tool | encode exact bytes (`base64 -w0` or equivalent); never type or rebuild base64 by hand |
+| Upload | `moonraker_file_upload` | `filename`, `data_base64`, `root="gcodes"`, `overwrite=false`; choose an unused filename via `moonraker_files_list` |
+| Verify | `moonraker_file_verify` | `verified: true`, size and SHA-256 match |
+| Confirm | `moonraker_files_list`, `moonraker_file_metadata` | time/filament vs slicer output |
 
-Orca's first gated export call returns a pending `apr_…`; after the human
-decides, retry the identical call. Cura's prepare returns an id/phrase for
-`cura_confirm_action`. Default Orca export roots are empty: exports are
-disabled until configured. Never widen export roots to make an export
-possible, and never claim an export succeeded without the file-list/metadata
-check. The filename in the gcodes root is what `moonraker_print_start` expects
-(relative path).
+`overwrite=true` is destructive and requires a human decision through
+`moonraker_confirm_action`; prefer a fresh filename. Default Orca export roots
+are empty: ask the user to configure one if an export is needed, and never
+edit the server config or widen roots yourself. Never claim a transfer without
+`verified: true` plus the file-list/metadata check. The filename in the
+gcodes root is what `moonraker_print_start` expects (relative path).
 
 ### Stage 7 — Print & babysit
 
+- `moonraker_print_preflight` first: a read-only Klippy/job/queue/temperature/
+  file and policy check. Read `ready_to_prepare_start` and its blocking
+  reasons before preparing a print start.
 - `moonraker_printer_status` is the curated snapshot;
   `moonraker_printer_objects` is the escape hatch for exact Klipper objects.
   Keep payloads small.
